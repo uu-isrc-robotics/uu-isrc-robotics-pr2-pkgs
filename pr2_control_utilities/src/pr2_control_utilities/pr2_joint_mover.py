@@ -39,7 +39,6 @@ from geometry_msgs.msg import Twist, Pose, PoseStamped, TwistStamped, PointStamp
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pr2_controllers_msgs.msg import *
-from pr2_controllers_msgs.msg._PointHeadAction import PointHeadAction
 from motion_planning_msgs.srv import (FilterJointTrajectoryWithConstraints,
                                       FilterJointTrajectoryWithConstraintsRequest, 
                                       FilterJointTrajectoryWithConstraintsResponse)
@@ -70,12 +69,15 @@ class RobotState(object):
     r_gripper_names = ('r_gripper_joint',)
     
     head_joint_names = ('head_pan_joint', 'head_tilt_joint')
+    
+    torso_joint_names = ["torso_lift_joint"]
         
     all = (left_joint_names + 
            right_joint_names + 
            head_joint_names + 
            l_gripper_names +  
-           r_gripper_names)
+           r_gripper_names +
+           torso_joint_names)
     
     def __init__(self):
         rospy.Subscriber("joint_states", JointState, self.joint_states_callback)
@@ -85,18 +87,24 @@ class RobotState(object):
         self.head_positions = []
         self.l_gripper_positions = []
         self.r_gripper_positions = []
-        
+        self.torso_position = []
         
         self.r_arm_client = actionlib.SimpleActionClient("r_arm_controller/joint_trajectory_action", JointTrajectoryAction)        
         self.l_arm_client = actionlib.SimpleActionClient("l_arm_controller/joint_trajectory_action", JointTrajectoryAction)
         self.r_gripper_client = actionlib.SimpleActionClient("r_gripper_controller/gripper_action", Pr2GripperCommandAction)        
         self.l_gripper_client = actionlib.SimpleActionClient("l_gripper_controller/gripper_action", Pr2GripperCommandAction)
+        self.torso_client = actionlib.SimpleActionClient("torso_controller/position_joint_action", SingleJointPositionAction)
         self.head_pointer_client = actionlib.SimpleActionClient("head_traj_controller/point_head_action", PointHeadAction)
-        self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)        
+        self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)
         
         rospy.loginfo("Waiting for trajectory filter service")
-        rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints")
-        self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
+        try:
+            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
+        except rospy.ROSException:
+            rospy.logwarn("No trajectory server found!")
+            self.filter_service = None
+        else:
+            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
                                                  FilterJointTrajectoryWithConstraints)
         
         # Some seemingly very important waits........
@@ -106,12 +114,14 @@ class RobotState(object):
         self.r_gripper_client.wait_for_server()
         self.l_gripper_client.wait_for_server()
         self.head_pointer_client.wait_for_server()
+        self.torso_client.wait_for_server()
         
         self.r_arm_client.cancel_all_goals()
         self.l_arm_client.cancel_all_goals()
         self.r_gripper_client.cancel_all_goals()
         self.l_gripper_client.cancel_all_goals()
         self.head_pointer_client.cancel_all_goals()
+        self.torso_client.cancel_all_goals()
         
         rospy.loginfo("Robot State is ready")
     
@@ -164,13 +174,21 @@ class RobotState(object):
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
             index = msg.name.index(joint)
             self.r_gripper_positions.append(msg.position[index])
+            
+        self.torso_position = []
+        for joint in self.torso_joint_names:
+            if not joint in msg.name:
+                rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+            index = msg.name.index(joint)
+            self.torso_position.append(msg.position[index])
+        
         
 class PR2JointMover(object):
     '''
     This is a convenience class to control the PR2 joints. 
     The joints can be saved and loaded from a file (see the PoseSaver class in save.py
     '''
-    def __init__(self, robot_state, name=""):
+    def __init__(self, robot_state, name=None):
         '''
         
         @param robot_state: a RobotState instance.
@@ -178,8 +196,11 @@ class PR2JointMover(object):
         '''
         
         self.robot_state = robot_state
-        self.name = name
-        self.time_to_reach = 1.0
+        if name is None:
+            self.name = "Default"
+        else:
+            self.name = name
+        self.time_to_reach = 5.0
         
         self.r_arm_client = robot_state.r_arm_client       
         self.l_arm_client = robot_state.l_arm_client 
@@ -187,6 +208,7 @@ class PR2JointMover(object):
         self.l_gripper_client = robot_state.l_gripper_client 
         self.head_pointer_client = robot_state.head_pointer_client
         self.head_client = robot_state.head_client 
+        self.torso_client = robot_state.torso_client
         self.filter_service = robot_state.filter_service
                 
         self.target_left_arm = []
@@ -194,14 +216,14 @@ class PR2JointMover(object):
         self.target_left_gripper = []
         self.target_right_gripper = []
         self.target_head = []
+        self.target_torso = []
         
         self.l_arm_done = False
         self.r_arm_done = False
         self.l_gripper_done = False
         self.r_gripper_done = False
         self.head_done = True
-        
-        
+        self.torso_done = False
     
     def __getstate__(self):
         return (self.robot_state,
@@ -243,40 +265,40 @@ class PR2JointMover(object):
                self.r_arm_done and \
                self.l_gripper_done and \
                self.r_gripper_done and \
-               self.head_done
+               self.head_done and \
+               self.torso_done
     
     def __l_arm_done_cb(self, state, result):
-#        rospy.loginfo("Left Arm Done!")
         self.l_arm_done = True    
     def __r_arm_done_cb(self, state, result):
-#        rospy.loginfo("Right Arm Done!")
         self.r_arm_done = True
     def __l_gripper_done_cb(self, state, result):
-#        rospy.loginfo("Left Gripper Done!")
         self.l_gripper_done = True
     def __r_gripper_done_cb(self, state, result):
-#        rospy.loginfo("Right Gripper Done!")
         self.r_gripper_done = True
     def __head_done_cb(self):
-#        rospy.loginfo("Head Done!")
         self.head_done = True
+    def __torso_done_cb(self):
+        self.torso_done = True
     
     def execute(self):
         '''
         Move to all the joint positions as previously read using parse_bookmark_file
         '''
-        if self.name != "":
-            rospy.loginfo("Executing mover %s"%self.name)
-        self.l_arm_done = False
-        self.r_arm_done = False
-        self.l_gripper_done = False
-        self.r_gripper_done = False
-        self.head_done = True
+        rospy.loginfo("Executing mover %s"%self.name)
+#        self.l_arm_done = False
+#        self.r_arm_done = False
+#        self.l_gripper_done = False
+#        self.r_gripper_done = False
+#        self.torso_done = False
+#        self.head_done = True
+                
         self.set_arm_state(self.target_left_arm, 'l_arm')
         self.set_arm_state(self.target_right_arm, 'r_arm')
         self.set_head_state(self.target_head)
         self.set_gripper_state(self.target_left_gripper, 'l_gripper')
         self.set_gripper_state(self.target_right_gripper, 'r_gripper')
+        self.set_torso_state(self.target_torso)
 
     def execute_and_wait(self):
         '''
@@ -331,6 +353,17 @@ class PR2JointMover(object):
     def set_arm_state(self, jvals, arm, wait = False, ):
         """ Sets goal for indicated arm (r_arm/l_arm) using provided joint values"""
         # Build trajectory message
+        
+        if len(jvals) == 0:
+            rospy.logwarn("No %s_arm goal given" % arm[0])
+            if arm[0] == "l":
+                self.l_arm_done = True
+            elif arm[0] == "r":
+                self.r_arm_done = True
+            return
+        
+#        rospy.loginfo("Senging %s_joints: %s" %(arm[0], str(jvals)))
+        
         command = JointTrajectory()
         command.joint_names = ['%s_shoulder_pan_joint' % arm[0], 
                                '%s_shoulder_lift_joint' % arm[0],
@@ -342,8 +375,10 @@ class PR2JointMover(object):
         
         if arm[0] == "l":
             client = self.l_arm_client
+            self.l_arm_done = False
         elif arm[0] == "r":
             client = self.r_arm_client
+            self.r_arm_done = False
 
         
         command.points.append(JointTrajectoryPoint(
@@ -377,8 +412,10 @@ class PR2JointMover(object):
         
         if arm[0] == "l":
             client = self.l_arm_client
+            self.l_arm_done = False
         elif arm[0] == "r":
             client = self.r_arm_client
+            self.r_arm_done = False
             
         for jvals in trajectory:
             command.points.append(JointTrajectoryPoint(
@@ -422,15 +459,25 @@ class PR2JointMover(object):
     def set_gripper_state(self, jval, gripper, wait=False):
         """ Sets goal for indicated gripper (r_gripper/l_gripper) using provided joint angle"""
         # Build trajectory message
+        if not (type(jval) is list):
+            jval = [jval] 
+        
+        if len(jval) == 0:
+            rospy.logwarn("No %s_gripper goal given" % gripper[0])
+            if gripper[0] == "l":
+                self.l_gripper_done = True
+            else:
+                self.r_gripper_done = True
+            return
         
         if gripper[0] == "l":
             client = self.l_gripper_client
-        elif gripper[0] == "r":
-            client = self.r_gripper_client        
+            self.l_gripper_done = False
+        elif gripper[0] == "r":            
+            client = self.r_gripper_client
+            self.r_gripper_done = False        
 
-        if not (type(jval) is list):
-            jval = [jval] 
-
+        
         goal = Pr2GripperCommandGoal()
         goal.command.max_effort = -1
         goal.command.position = jval[0]
@@ -447,23 +494,28 @@ class PR2JointMover(object):
         """ Sets goal for head using provided joint values"""
         # Build trajectory message
         
+        self.head_done = True
+        
+        if len(jvals) == 0:
+            rospy.logwarn("No head target given")
+            return
+        
         head_goal = JointTrajectory()
         head_goal.joint_names.append('head_pan_joint')
         head_goal.joint_names.append('head_tilt_joint')
         
         head_goal.points.append(JointTrajectoryPoint(
             positions=jvals,
-            velocities = [0.01] * (len(head_goal.joint_names)),
+            velocities = [0.0001] * (len(head_goal.joint_names)),
 #            velocities = [],
             accelerations = [],
             time_from_start =  rospy.Duration(1.0))
         )
 
         try:
-            #print head_goal
             self.head_client.publish(head_goal)
         except:
-            print "failed to publish head position!"
+            rospy.logerr("failed to publish head position!")
 
     def point_head_gripper(self, gripper):
         goal = PointHeadGoal()
@@ -479,23 +531,26 @@ class PR2JointMover(object):
         
         self.head_pointer_client.send_goal_and_wait(goal, rospy.Duration(2.0))
 
-    def set_torso_state(self, jval):
+    def set_torso_state(self, jval, wait=False):
         """ Sets goal for torso using provided value"""
         
+        if not (type(jval) is list):
+            jval = [jval] 
         
-        # Build trajectory message
-        torso_goal = JointTrajectory()
-        torso_goal.joint_names.append('torso_lift_joint')
-        torso_goal.points.append(JointTrajectoryPoint())
-        torso_goal.points[0].time_from_start = rospy.Duration(0.0)
-        torso_goal.points[0].velocities.append(0)
-        torso_goal.points[0].positions.append(jval)
-#        torso_goal.header.stamp = rospy.get_rostime() + rospy.Duration(0.01)
-        try:
-            #print head_goal
-            self.publishers["torso"].publish(torso_goal)
-        except:
-            print "failed to publish torso position!"
+        if len(jval) == 0:
+            rospy.logwarn("No torso target given!")
+            self.torso_done = True
+            return
+        
+        self.torso_done = False
+        
+        goal = SingleJointPositionGoal()
+        goal.position = jval[0]
+        goal.min_duration = rospy.Duration(self.time_to_reach)
+        
+        self.torso_client.send_goal(goal, done_cb=self.__torso_done_cb())
+        if wait:
+            self.torso_client.wait_for_result()
 
     def parse_bookmark_file(self, bfile):
         '''
@@ -510,49 +565,6 @@ class PR2JointMover(object):
          
         @param bfile: the string name of the file to open
         '''
-#        try:
-#            if type(bfile) is str:
-#                f = open(bfile,'r')
-#            else:
-#                f = bfile
-#    
-#            #label
-#            l = f.readline()
-#            self.name = l.split(":")[1]
-#    
-#            #r_arm
-#            l = f.readline()
-#            jvals_str = l.split(":")[1]
-#            jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-#            self.target_right_arm = jvals    
-#            
-#            #l_arm
-#            l = f.readline()
-#            jvals_str = l.split(":")[1]
-#            jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-#            self.target_left_arm = jvals
-#            
-#            #r_gripper
-#            l = f.readline()
-#            jvals_str = l.split(":")[1]
-#            jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-#            self.target_right_gripper = jvals
-#            
-#            #l_gripper
-#            l = f.readline()
-#            jvals_str = l.split(":")[1]
-#            jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-#            self.target_left_gripper = jvals
-#            
-#            #head
-#            l = f.readline()
-#            jvals_str = l.split(":")[1]
-#            jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-#            self.target_head = jvals         
-#        except:
-#            return False
-#        else:
-#            return True       
         
         if type(bfile) is str:
             f = open(bfile,'r')
@@ -565,7 +577,7 @@ class PR2JointMover(object):
                 l = f.readline()
                 l.strip("\n")
                 if len(l) == 0:
-                    raise exceptions.Exception('empty line')
+                    break
                 if l.find("arm") != -1:
                     jvals_str = l.split(":")[1]
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
@@ -590,6 +602,8 @@ class PR2JointMover(object):
                     jvals_str = l.split(":")[1]
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
                     self.target_head = jvals
+                if l.find("torso") != -1:
+                    self.target_torso = float(l.split(":")[1])
                 if l.find("time") != -1:
                     self.time_to_reach = float(l.split(":")[1])                    
                 if l.find("label") != -1:
@@ -601,15 +615,16 @@ class PR2JointMover(object):
 #
         if type(bfile) is str:
             f.close()
-#        print '-------------------------------'
-#        print 'larm', self.target_left_arm
-#        print 'rarm', self.target_right_arm
-#        print 'lgripper', self.target_left_gripper
-#        print 'rgripper', self.target_right_gripper
-#        print 'head', self.target_head
-#        print 'time', self.time_to_reach
-#        print '-------------------------------'
+
         return True
+
+    def clear_targets(self):
+        self.target_head = []
+        self.target_left_arm = []
+        self.target_right_arm = []
+        self.target_right_gripper = []
+        self.target_left_gripper = []
+        self.target_torso = []
         
     def store_targets(self, jstate=False):
         '''
@@ -621,6 +636,7 @@ class PR2JointMover(object):
             self.target_right_arm = self.robot_state.right_arm_positions
             self.target_left_gripper = self.robot_state.l_gripper_positions
             self.target_right_gripper = self.robot_state.r_gripper_positions
+            self.target_torso = self.robot_state.torso_position
         else:
             self.target_head = []
             for name in self.robot_state.head_joint_names:
@@ -674,19 +690,11 @@ class PR2JointMover(object):
         
     def write_targets(self, bfile):
         '''
-        Write on the file the previsouly stored target joints
+        Write on the file the previously stored target joints
         @param bfile: either a string or an open file object
         '''
-#        print '-------------------------------'
-#        print 'larm', self.target_left_arm
-#        print 'rarm', self.target_right_arm
-#        print 'lgripper', self.target_left_gripper
-#        print 'rgripper', self.target_right_gripper
-#        print 'head', self.target_head
-#        print 'time', self.time_to_reach
-#        print '-------------------------------'
         if type(bfile) is str:
-            f = open(file,'r')
+            f = open(bfile,'w')
         else:
             f = bfile
         
@@ -708,6 +716,10 @@ class PR2JointMover(object):
         
         f.write("head:")
         f.write(", ".join(str(i) for i in self.target_head))
+        f.write("\n")
+        
+        f.write("torso:")
+        f.write(", ".join(str(i) for i in self.target_torso))
         f.write("\n")
         
         f.write("time: %f\n"% self.time_to_reach)
@@ -747,10 +759,28 @@ class PosesSet(object):
         for mover in self.movers:
             mover.execute_and_wait()
         
-if __name__ == "__main__":
-    import os
+
+def test_move_torso():
+    state = RobotState()
+    mover = PR2JointMover(state)
     
-    rospy.init_node('trytest', anonymous=True)
+    mover.set_torso_state(0.2,wait=True)
+    
+    mover.store_targets()
+    mover.write_targets("/home/pezzotto/tmp.stack")
+    
+def test_open_file():
+    state = RobotState()
+    mover = PR2JointMover(state)
+    
+    mover.parse_bookmark_file("/home/pezzotto/tmp.stack")
+    mover.execute_and_wait()
+    mover.clear_targets()
+    mover.parse_bookmark_file("/home/pezzotto/grasp_pos_big_table.stack")
+    mover.execute_and_wait()
+    
+    
+def prepare_coffee():
     state = RobotState()
     mover = PosesSet(state)
     
@@ -774,3 +804,16 @@ if __name__ == "__main__":
     dance1_mover.execute_and_wait()
     dance2_mover.execute_and_wait()
     dance2_mover.spin_wrists(10)
+
+
+if __name__ == "__main__":
+    import os
+    
+    rospy.init_node('trytest', anonymous=True)
+#    test_move_torso()
+    test_open_file()
+    
+    rospy.loginfo("Done")
+    while not rospy.is_shutdown():
+        rospy.sleep(0.1)    
+    
