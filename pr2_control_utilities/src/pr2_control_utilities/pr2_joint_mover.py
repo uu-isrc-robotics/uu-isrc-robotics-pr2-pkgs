@@ -70,14 +70,14 @@ class RobotState(object):
     
     head_joint_names = ('head_pan_joint', 'head_tilt_joint')
     
-    torso_joint_names = ["torso_lift_joint"]
+    torso_joint_names = ("torso_lift_joint",)
         
     all = (left_joint_names + 
            right_joint_names + 
            head_joint_names + 
            l_gripper_names +  
-           r_gripper_names +
-           torso_joint_names)
+           r_gripper_names 
+           )
     
     def __init__(self):
         rospy.Subscriber("joint_states", JointState, self.joint_states_callback)
