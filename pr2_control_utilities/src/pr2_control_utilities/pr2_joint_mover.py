@@ -542,9 +542,11 @@ class PR2JointMover(object):
             self.torso_done = True
             return
         
-        #HACK: it looks like with a value of 0 the actionserver doesn't return..
+        #HACK: it looks like with a value outside this range the actionserver doesn't return..
         if jval[0] < 0.012:
-            jval[0] < 0.2
+            jval[0] = 0.2
+        if jval[0] > 0.3:
+            jval[0] = 0.3
         self.torso_done = False
         
         goal = SingleJointPositionGoal()
@@ -587,9 +589,9 @@ class PR2JointMover(object):
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
                     arm = l.split(":")[0]
                     if arm[0] == 'l':
-                        self.__target_left_arm = jvals
+                        self.target_left_arm = jvals
                     elif arm[0] == 'r':
-                        self.__target_right_arm = jvals
+                        self.target_right_arm = jvals
                     else:
                         rospy.logerr("Error, unkown joint: %s"%arm)
                 if l.find("gripper") != -1:
@@ -597,17 +599,17 @@ class PR2JointMover(object):
                     jval = map(lambda x: float(x),jval_str.strip("\n").split(","))[0]
                     gripper = l.split(":")[0]
                     if gripper[0] == 'l':
-                        self.__target_left_gripper = [jval]
+                        self.target_left_gripper = [jval]
                     elif gripper[0] == 'r':
-                        self.__target_right_gripper = [jval]
+                        self.target_right_gripper = [jval]
                     else:
                         rospy.logerr("Error, unkown joint: %s"%gripper)                
                 if l.find("head") != -1:
                     jvals_str = l.split(":")[1]
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-                    self.__target_head = jvals
+                    self.target_head = jvals
                 if l.find("torso") != -1:
-                    self.__target_torso = [float(l.split(":")[1])]
+                    self.target_torso = [float(l.split(":")[1])]
                 if l.find("time") != -1:
                     self.time_to_reach = float(l.split(":")[1])                    
                 if l.find("label") != -1:
@@ -897,7 +899,7 @@ def test_move_torso():
     state = RobotState()
     mover = PR2JointMover(state)
     
-    mover.set_torso_state(0.0,wait=True)
+    mover.set_torso_state(1.0,wait=True)
     
     mover.store_targets()
 #    mover.write_targets("/home/pezzotto/tmp.stack")
