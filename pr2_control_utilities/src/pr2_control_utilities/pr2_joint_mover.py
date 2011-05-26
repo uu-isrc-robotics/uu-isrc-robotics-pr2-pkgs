@@ -76,7 +76,8 @@ class RobotState(object):
            right_joint_names + 
            head_joint_names + 
            l_gripper_names +  
-           r_gripper_names 
+           r_gripper_names +
+           torso_joint_names
            )
     
     def __init__(self):
@@ -689,6 +690,16 @@ class PR2JointMover(object):
                 try:
                     i = jstate.name.index(name)
                     self.__target_right_gripper.append(jstate.position[i])
+                except ValueError:
+                    i = -1
+                    rospy.logerr("this shouldn't have happened")
+                    return
+                
+            self.__target_torso = []
+            for name in self.robot_state.torso_joint_names:
+                try:
+                    i = jstate.name.index(name)
+                    self.__target_torso.append(jstate.position[i])
                 except ValueError:
                     i = -1
                     rospy.logerr("this shouldn't have happened")
