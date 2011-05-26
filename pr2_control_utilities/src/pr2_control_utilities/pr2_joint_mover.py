@@ -76,7 +76,8 @@ class RobotState(object):
            right_joint_names + 
            head_joint_names + 
            l_gripper_names +  
-           r_gripper_names 
+           r_gripper_names +
+           torso_joint_names
            )
     
     def __init__(self):

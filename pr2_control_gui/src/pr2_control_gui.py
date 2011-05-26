@@ -257,7 +257,7 @@ class C_PR2ControlCentre:
 
         # torso
         if self.checks['torso']:
-            for name in self.robot_state.torso_names:
+            for name in self.robot_state.torso_joint_names:
                 value = float(self.wTree.get_object("c_"+name).get_value())
                 if self.inDegrees:
                     value = value * pi / 180
