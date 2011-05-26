@@ -689,6 +689,16 @@ class PR2JointMover(object):
                     i = -1
                     rospy.logerr("this shouldn't have happened")
                     return
+                
+            self.__target_torso = []
+            for name in self.robot_state.torso_joint_names:
+                try:
+                    i = jstate.name.index(name)
+                    self.__target_torso.append(jstate.position[i])
+                except ValueError:
+                    i = -1
+                    rospy.logerr("this shouldn't have happened")
+                    return
         
     def write_targets(self, bfile):
         '''
@@ -795,7 +805,7 @@ class PR2JointMover(object):
             self.__target_left_arm = value
         else:
             self.__target_left_arm = [value]
-        if len(self.__target_head) != 7:
+        if len(self.__target_left_arm) != 7:
             rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(7,len(self.__target_left_arm)))
             self.__target_left_arm = []
 

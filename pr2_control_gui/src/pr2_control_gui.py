@@ -109,6 +109,10 @@ class C_PR2ControlCentre:
                 widget.set_range(-180.0, 180.0)
             else:
                 widget.set_range(-1000*pi, 1000*pi)
+            widget = self.wTree.get_object("c_"+"torso_lift_joint")
+            widget.set_digits(10)
+            widget.set_increments(0.1, 0.01)
+            widget.set_range(0.012, 0.3)
         self.wTree.get_object("time_to_action_completion").set_range(0, 60)
         self.wTree.get_object("time_to_action_completion").set_digits(2)
         self.wTree.get_object("time_to_action_completion").set_increments(0.5, 1)
@@ -351,7 +355,12 @@ class C_PR2ControlCentre:
         else:
             (jstate, self.mover) = self.stackDict[label]
             for name in self.robot_state.all:
-                i = jstate.name.index(name)
+                try:
+                    i = jstate.name.index(name)
+                except ValueError:
+                    print name
+                    print "jstate.name:", jstate.name
+                    return
                 value = float(jstate.position[i])
                 if self.inDegrees:
                     value *= 180 / pi
@@ -377,7 +386,7 @@ class C_PR2ControlCentre:
                 mover.name = label
                 mover.write_targets(fp)
 #                msg = "label:%s\n\n" % label                
-#                fp.write(msg)
+                fp.write("\n")
                 
 
             fp.close()
@@ -394,14 +403,16 @@ class C_PR2ControlCentre:
                            mover.target_left_arm +
                            mover.target_right_arm + 
                            mover.target_left_gripper +
-                           mover.target_right_gripper
+                           mover.target_right_gripper +
+                           mover.target_torso
                            )
                           
         jstate.name = [i for i in self.robot_state.head_joint_names +
                        self.robot_state.left_joint_names + 
                        self.robot_state.right_joint_names +
                        self.robot_state.l_gripper_names + 
-                       self.robot_state.r_gripper_names]
+                       self.robot_state.r_gripper_names +
+                       self.robot_state.torso_joint_names]
         return jstate
 
 
