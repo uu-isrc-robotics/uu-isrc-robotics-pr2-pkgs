@@ -48,7 +48,11 @@ class PR2MoveArm(object):
         self.joint_mover = joint_mover
         
         
-    def move_right_arm(self, position, orientation, frame_id,  waiting_time):
+    def move_right_arm(self, position, orientation, frame_id,  waiting_time, 
+                       allowed_contacts = None):
+        
+        if allowed_contacts is None:
+            allowed_contacts = []
         goal = MoveArmGoal()
         goal.motion_plan_request.group_name = "right_arm"
         goal.motion_plan_request.num_planning_attempts = 10
@@ -90,7 +94,8 @@ class PR2MoveArm(object):
         goal.motion_plan_request.goal_constraints.position_constraints.append(position_constraint)
         goal.motion_plan_request.goal_constraints.orientation_constraints.append(orientation_constraint)
         
-        goal.disable_collision_monitoring = True
+        goal.motion_plan_request.allowed_contacts = allowed_contacts        
+        goal.disable_collision_monitoring = False
         
 #        rospy.loginfo("Goal: " + str(goal))
         state = self.move_right_arm_client.send_goal_and_wait(goal, rospy.Duration(waiting_time))

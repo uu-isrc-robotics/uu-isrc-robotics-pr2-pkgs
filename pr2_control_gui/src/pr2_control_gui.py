@@ -112,7 +112,7 @@ class C_PR2ControlCentre:
         self.wTree.get_object("time_to_action_completion").set_range(0, 60)
         self.wTree.get_object("time_to_action_completion").set_digits(2)
         self.wTree.get_object("time_to_action_completion").set_increments(0.5, 1)
-        self.wTree.get_object("time_to_action_completion").set_value(1.0)
+        self.wTree.get_object("time_to_action_completion").set_value(5.0)
         
         # Subscribers
         self.currentJointStates = JointState()
@@ -323,6 +323,7 @@ class C_PR2ControlCentre:
         else:
             self.mover.store_targets(jstate)
         self.mover.time_to_reach = teatime
+        self.mover.name = label        
         self.stackDict[label] = (jstate, self.mover)
         
         self.mover = pr2_joint_mover.PR2JointMover(self.robot_state)
@@ -373,9 +374,10 @@ class C_PR2ControlCentre:
             for treerow in self.stackList:
                 label = treerow[0]
                 (jstate,mover) = self.stackDict[label]
+                mover.name = label
                 mover.write_targets(fp)
-                msg = "label:%s\n\n" % label                
-                fp.write(msg)
+#                msg = "label:%s\n\n" % label                
+#                fp.write(msg)
                 
 
             fp.close()

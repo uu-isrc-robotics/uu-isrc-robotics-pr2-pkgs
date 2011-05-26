@@ -211,12 +211,12 @@ class PR2JointMover(object):
         self.torso_client = robot_state.torso_client
         self.filter_service = robot_state.filter_service
                 
-        self.target_left_arm = []
-        self.target_right_arm = []
-        self.target_left_gripper = []
-        self.target_right_gripper = []
-        self.target_head = []
-        self.target_torso = []
+        self.__target_left_arm = []
+        self.__target_right_arm = []
+        self.__target_left_gripper = []
+        self.__target_right_gripper = []
+        self.__target_head = []
+        self.__target_torso = []
         
         self.l_arm_done = False
         self.r_arm_done = False
@@ -228,20 +228,20 @@ class PR2JointMover(object):
     def __getstate__(self):
         return (self.robot_state,
                 self.name,
-                self.target_head,
-                self.target_left_arm,
-                self.target_left_gripper,
-                self.target_right_arm,
-                self.target_right_gripper)
+                self.__target_head,
+                self.__target_left_arm,
+                self.__target_left_gripper,
+                self.__target_right_arm,
+                self.__target_right_gripper)
     
     def __setstate__(self, state):
         (self.robot_state,
          self.name,
-         self.target_head,
-         self.target_left_arm,
-         self.target_left_gripper,
-         self.target_right_arm,
-         self.target_right_gripper) = state
+         self.__target_head,
+         self.__target_left_arm,
+         self.__target_left_gripper,
+         self.__target_right_arm,
+         self.__target_right_gripper) = state
         
         #bits that couldn't be pickled
         self.r_arm_client = self.robot_state.r_arm_client       
@@ -293,12 +293,12 @@ class PR2JointMover(object):
 #        self.torso_done = False
 #        self.head_done = True
                 
-        self.set_arm_state(self.target_left_arm, 'l_arm')
-        self.set_arm_state(self.target_right_arm, 'r_arm')
-        self.set_head_state(self.target_head)
-        self.set_gripper_state(self.target_left_gripper, 'l_gripper')
-        self.set_gripper_state(self.target_right_gripper, 'r_gripper')
-        self.set_torso_state(self.target_torso)
+        self.set_arm_state(self.__target_left_arm, 'l_arm')
+        self.set_arm_state(self.__target_right_arm, 'r_arm')
+        self.set_head_state(self.__target_head)
+        self.set_gripper_state(self.__target_left_gripper, 'l_gripper')
+        self.set_gripper_state(self.__target_right_gripper, 'r_gripper')
+        self.set_torso_state(self.__target_torso)
 
     def execute_and_wait(self):
         '''
@@ -577,15 +577,16 @@ class PR2JointMover(object):
                 l = f.readline()
                 l.strip("\n")
                 if len(l) == 0:
-                    break
+                    #This is the end of the file, let's signal that we found it
+                    return False
                 if l.find("arm") != -1:
                     jvals_str = l.split(":")[1]
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
                     arm = l.split(":")[0]
                     if arm[0] == 'l':
-                        self.target_left_arm = jvals
+                        self.__target_left_arm = jvals
                     elif arm[0] == 'r':
-                        self.target_right_arm = jvals
+                        self.__target_right_arm = jvals
                     else:
                         rospy.logerr("Error, unkown joint: %s"%arm)
                 if l.find("gripper") != -1:
@@ -593,17 +594,17 @@ class PR2JointMover(object):
                     jval = map(lambda x: float(x),jval_str.strip("\n").split(","))[0]
                     gripper = l.split(":")[0]
                     if gripper[0] == 'l':
-                        self.target_left_gripper = [jval]
+                        self.__target_left_gripper = [jval]
                     elif gripper[0] == 'r':
-                        self.target_right_gripper = [jval]
+                        self.__target_right_gripper = [jval]
                     else:
                         rospy.logerr("Error, unkown joint: %s"%gripper)                
                 if l.find("head") != -1:
                     jvals_str = l.split(":")[1]
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
-                    self.target_head = jvals
+                    self.__target_head = jvals
                 if l.find("torso") != -1:
-                    self.target_torso = float(l.split(":")[1])
+                    self.__target_torso = [float(l.split(":")[1])]
                 if l.find("time") != -1:
                     self.time_to_reach = float(l.split(":")[1])                    
                 if l.find("label") != -1:
@@ -619,12 +620,12 @@ class PR2JointMover(object):
         return True
 
     def clear_targets(self):
-        self.target_head = []
-        self.target_left_arm = []
-        self.target_right_arm = []
-        self.target_right_gripper = []
-        self.target_left_gripper = []
-        self.target_torso = []
+        self.__target_head = []
+        self.__target_left_arm = []
+        self.__target_right_arm = []
+        self.__target_right_gripper = []
+        self.__target_left_gripper = []
+        self.__target_torso = []
         
     def store_targets(self, jstate=False):
         '''
@@ -633,56 +634,56 @@ class PR2JointMover(object):
         if not jstate:
             self.target_head = self.robot_state.head_positions
             self.target_left_arm = self.robot_state.left_arm_positions
-            self.target_right_arm = self.robot_state.right_arm_positions
-            self.target_left_gripper = self.robot_state.l_gripper_positions
+            self.target_right_arm = self.robot_state.right_arm_positions            
+            self.target_left_gripper = self.robot_state.l_gripper_positions            
             self.target_right_gripper = self.robot_state.r_gripper_positions
-            self.target_torso = self.robot_state.torso_position
+            self.target_torso = self.robot_state.torso_position            
         else:
-            self.target_head = []
+            self.__target_head = []
             for name in self.robot_state.head_joint_names:
                 try:
                     i = jstate.name.index(name)
-                    self.target_head.append(jstate.position[i])
+                    self.__target_head.append(jstate.position[i])
                 except ValueError:
                     i = -1
                     rospy.logerr("this shouldn't have happened")
                     return
 
-            self.target_left_arm = []
+            self.__target_left_arm = []
             for name in self.robot_state.left_joint_names:
                 try:
                     i = jstate.name.index(name)
-                    self.target_left_arm.append(jstate.position[i])
+                    self.__target_left_arm.append(jstate.position[i])
                 except ValueError:
                     i = -1
                     rospy.logerr("this shouldn't have happened")
                     return
 
-            self.target_right_arm = []
+            self.__target_right_arm = []
             for name in self.robot_state.right_joint_names:
                 try:
                     i = jstate.name.index(name)
-                    self.target_right_arm.append(jstate.position[i])
+                    self.__target_right_arm.append(jstate.position[i])
                 except ValueError:
                     i = -1
                     rospy.logerr("this shouldn't have happened")
                     return
             
-            self.target_left_gripper = []
+            self.__target_left_gripper = []
             for name in self.robot_state.l_gripper_names:
                 try:
                     i = jstate.name.index(name)
-                    self.target_left_gripper.append(jstate.position[i])
+                    self.__target_left_gripper.append(jstate.position[i])
                 except ValueError:
                     i = -1
                     rospy.logerr("this shouldn't have happened")
                     return
             
-            self.target_right_gripper = []
+            self.__target_right_gripper = []
             for name in self.robot_state.r_gripper_names:
                 try:
                     i = jstate.name.index(name)
-                    self.target_right_gripper.append(jstate.position[i])
+                    self.__target_right_gripper.append(jstate.position[i])
                 except ValueError:
                     i = -1
                     rospy.logerr("this shouldn't have happened")
@@ -698,31 +699,160 @@ class PR2JointMover(object):
         else:
             f = bfile
         
-        f.write("l_arm:")
-        f.write(", ".join(str(i) for i in self.target_left_arm))
-        f.write("\n")
+        if len(self.__target_left_arm) > 0:
+            f.write("l_arm:")
+            f.write(", ".join(str(i) for i in self.__target_left_arm))
+            f.write("\n")
         
-        f.write("r_arm:")
-        f.write(", ".join(str(i) for i in self.target_right_arm))
-        f.write("\n")
+        if len(self.__target_right_arm) > 0:
+            f.write("r_arm:")
+            f.write(", ".join(str(i) for i in self.__target_right_arm))
+            f.write("\n")
         
-        f.write("l_gripper:")
-        f.write(", ".join(str(i) for i in self.target_left_gripper))
-        f.write("\n")
-        
-        f.write("r_gripper:")
-        f.write(", ".join(str(i) for i in self.target_right_gripper))
-        f.write("\n")
-        
-        f.write("head:")
-        f.write(", ".join(str(i) for i in self.target_head))
-        f.write("\n")
-        
-        f.write("torso:")
-        f.write(", ".join(str(i) for i in self.target_torso))
-        f.write("\n")
+        if len(self.__target_left_gripper) > 0:
+            f.write("l_gripper:")
+            f.write(", ".join(str(i) for i in self.__target_left_gripper))
+            f.write("\n")
+
+        if len(self.__target_right_gripper) > 0:        
+            f.write("r_gripper:")
+            f.write(", ".join(str(i) for i in self.__target_right_gripper))
+            f.write("\n")
+
+        if len(self.__target_head) > 0:        
+            f.write("head:")
+            f.write(", ".join(str(i) for i in self.__target_head))
+            f.write("\n")
+
+        if len(self.__target_torso) > 0:        
+            f.write("torso:")
+            f.write(", ".join(str(i) for i in self.__target_torso))
+            f.write("\n")
         
         f.write("time: %f\n"% self.time_to_reach)
+        f.write("label: %s\n" % self.name)
+
+    def __str__(self):
+        out = ""
+        
+        out += ("l_arm:")
+        out += (", ".join(str(i) for i in self.__target_left_arm))
+        out += ("\n")
+        
+        out += ("r_arm:")
+        out += (", ".join(str(i) for i in self.__target_right_arm))
+        out += ("\n")
+        
+        out += ("l_gripper:")
+        out += (", ".join(str(i) for i in self.__target_left_gripper))
+        out += ("\n")
+        
+        out += ("r_gripper:")
+        out += (", ".join(str(i) for i in self.__target_right_gripper))
+        out += ("\n")
+        
+        out += ("head:")
+        out += (", ".join(str(i) for i in self.__target_head))
+        out += ("\n")
+        
+        out += ("torso:")
+        out += (", ".join(str(i) for i in self.__target_torso))
+        out += ("\n")
+        
+        out += ("time: %f\n"% self.time_to_reach)
+        out += ("label: %s\n" % self.name)
+        
+        return out
+
+    def get_target_left_arm(self):
+        return self.__target_left_arm
+
+
+    def get_target_right_arm(self):
+        return self.__target_right_arm
+
+
+    def get_target_left_gripper(self):
+        return self.__target_left_gripper
+
+
+    def get_target_right_gripper(self):
+        return self.__target_right_gripper
+
+
+    def get_target_head(self):
+        return self.__target_head
+
+
+    def get_target_torso(self):
+        return self.__target_torso
+
+
+    def set_target_left_arm(self, value):
+        self.__target_left_arm = value
+        if type(value) is list:
+            self.__target_left_arm = value
+        else:
+            self.__target_left_arm = [value]
+        if len(self.__target_head) != 7:
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_left_arm)))
+            self.__target_left_arm = []
+
+    def set_target_right_arm(self, value):
+        self.__target_right_arm = value
+        if type(value) is list:
+            self.__target_right_arm = value
+        else:
+            self.__target_right_arm = [value]
+        if len(self.__target_right_arm) != 7:
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_right_arm)))
+            self.__target_right_arm = []
+
+    def set_target_left_gripper(self, value):
+        if type(value) is list:
+            self.__target_left_gripper = value
+        else:
+            self.__target_left_gripper = [value]
+        if len(self.__target_left_gripper) != 1:
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_left_gripper)))
+            self.__target_left_gripper = []
+
+
+    def set_target_right_gripper(self, value):
+        if type(value) is list:
+            self.__target_right_gripper = value
+        else:
+            self.__target_right_gripper = [value]
+        if len(self.__target_right_gripper) != 1:
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_right_gripper)))
+            self.__target_right_gripper = []
+
+
+    def set_target_head(self, value):
+        if type(value) is list:
+            self.__target_head = value
+        else:
+            self.__target_head = [value]
+        if len(self.__target_head) != 2:
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_head)))
+            self.__target_head = []
+
+    def set_target_torso(self, value):
+        if type(value) is list:
+            self.__target_torso = value
+        else:
+            self.__target_torso = [value]
+        if len(self.__target_torso) != 1:
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_torso)))
+            self.__target_torso = []
+
+    target_left_arm = property(get_target_left_arm, set_target_left_arm)
+    target_right_arm = property(get_target_right_arm, set_target_right_arm)
+    target_left_gripper = property(get_target_left_gripper, set_target_left_gripper)
+    target_right_gripper = property(get_target_right_gripper, set_target_right_gripper)
+    target_head = property(get_target_head, set_target_head)
+    target_torso = property(get_target_torso, set_target_torso)
+        
 
 class PosesSet(object):
     '''
@@ -764,21 +894,27 @@ def test_move_torso():
     state = RobotState()
     mover = PR2JointMover(state)
     
-    mover.set_torso_state(0.2,wait=True)
+    mover.set_torso_state(0.1,wait=True)
     
     mover.store_targets()
-    mover.write_targets("/home/pezzotto/tmp.stack")
+#    mover.write_targets("/home/pezzotto/tmp.stack")
     
 def test_open_file():
     state = RobotState()
     mover = PR2JointMover(state)
     
-    mover.parse_bookmark_file("/home/pezzotto/tmp.stack")
-    mover.execute_and_wait()
     mover.clear_targets()
-    mover.parse_bookmark_file("/home/pezzotto/grasp_pos_big_table.stack")
-    mover.execute_and_wait()
+    mover.parse_bookmark_file("/home/pezzotto/Poses/grasp_pos_big_table.stack")
+    rospy.loginfo("Mover: \n%s" % str(mover))
     
+    mover.execute_and_wait()
+
+def test_save_file():
+    state = RobotState()
+    mover = PR2JointMover(state)
+    
+    mover.store_targets()
+            
     
 def prepare_coffee():
     state = RobotState()
