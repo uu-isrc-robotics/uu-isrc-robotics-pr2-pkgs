@@ -542,6 +542,9 @@ class PR2JointMover(object):
             self.torso_done = True
             return
         
+        #HACK: it looks like with a value of 0 the actionserver doesn't return..
+        if jval[0] < 0.012:
+            jval[0] < 0.2
         self.torso_done = False
         
         goal = SingleJointPositionGoal()
@@ -794,7 +797,7 @@ class PR2JointMover(object):
             self.__target_left_arm = value
         else:
             self.__target_left_arm = [value]
-        if len(self.__target_head) != 7:
+        if len(self.__target_left_arm) != 7:
             rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(7,len(self.__target_left_arm)))
             self.__target_left_arm = []
 
@@ -894,7 +897,7 @@ def test_move_torso():
     state = RobotState()
     mover = PR2JointMover(state)
     
-    mover.set_torso_state(0.1,wait=True)
+    mover.set_torso_state(0.0,wait=True)
     
     mover.store_targets()
 #    mover.write_targets("/home/pezzotto/tmp.stack")
@@ -946,8 +949,8 @@ if __name__ == "__main__":
     import os
     
     rospy.init_node('trytest', anonymous=True)
-#    test_move_torso()
-    test_open_file()
+    test_move_torso()
+#    test_open_file()
     
     rospy.loginfo("Done")
     while not rospy.is_shutdown():
