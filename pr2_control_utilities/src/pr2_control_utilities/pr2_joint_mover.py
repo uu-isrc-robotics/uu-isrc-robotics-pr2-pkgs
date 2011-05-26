@@ -795,7 +795,7 @@ class PR2JointMover(object):
         else:
             self.__target_left_arm = [value]
         if len(self.__target_head) != 7:
-            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_left_arm)))
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(7,len(self.__target_left_arm)))
             self.__target_left_arm = []
 
     def set_target_right_arm(self, value):
@@ -805,7 +805,7 @@ class PR2JointMover(object):
         else:
             self.__target_right_arm = [value]
         if len(self.__target_right_arm) != 7:
-            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_right_arm)))
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(7,len(self.__target_right_arm)))
             self.__target_right_arm = []
 
     def set_target_left_gripper(self, value):
@@ -834,7 +834,7 @@ class PR2JointMover(object):
         else:
             self.__target_head = [value]
         if len(self.__target_head) != 2:
-            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_head)))
+            rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(2,len(self.__target_head)))
             self.__target_head = []
 
     def set_target_torso(self, value):
