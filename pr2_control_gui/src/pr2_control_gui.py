@@ -53,7 +53,7 @@ class C_PR2ControlCentre:
             self.wTree.get_object("check_r_gripper").set_active(True)
             self.wTree.get_object("check_r_gripper").set_active(True)
             self.wTree.get_object("check_head").set_active(True)
-            self.wTree.get_object("check_torso").set_active(False)
+            self.wTree.get_object("check_torso").set_active(True)
                
         # keep track of checks for fast access
         self.checks = {"l_arm":self.wTree.get_object("check_l_arm").get_active(),
@@ -254,6 +254,15 @@ class C_PR2ControlCentre:
                 jvals.append(value)
             self.mover.set_head_state(jvals)
         pass
+
+        # torso
+        if self.checks['torso']:
+            for name in self.robot_state.torso_names:
+                value = float(self.wTree.get_object("c_"+name).get_value())
+                if self.inDegrees:
+                    value = value * pi / 180
+                jval = value 
+            self.mover.set_torso_state(jval, 'torso')
 
 
     def on_copy_clicked(self, widget):
