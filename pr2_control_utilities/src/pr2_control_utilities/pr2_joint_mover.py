@@ -846,12 +846,12 @@ class PR2JointMover(object):
             rospy.logerr("Wrong lenght of targets, expected %d, got %d" %(1,len(self.__target_torso)))
             self.__target_torso = []
 
-    _target_left_arm = property(get_target_left_arm, set_target_left_arm)
-    _target_right_arm = property(get_target_right_arm, set_target_right_arm)
-    _target_left_gripper = property(get_target_left_gripper, set_target_left_gripper)
-    _target_right_gripper = property(get_target_right_gripper, set_target_right_gripper)
-    _target_head = property(get_target_head, set_target_head)
-    _target_torso = property(get_target_torso, set_target_torso)
+    target_left_arm = property(get_target_left_arm, set_target_left_arm)
+    target_right_arm = property(get_target_right_arm, set_target_right_arm)
+    target_left_gripper = property(get_target_left_gripper, set_target_left_gripper)
+    target_right_gripper = property(get_target_right_gripper, set_target_right_gripper)
+    target_head = property(get_target_head, set_target_head)
+    target_torso = property(get_target_torso, set_target_torso)
         
 
 class PosesSet(object):
