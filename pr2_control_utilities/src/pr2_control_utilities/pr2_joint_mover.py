@@ -577,7 +577,8 @@ class PR2JointMover(object):
                 l = f.readline()
                 l.strip("\n")
                 if len(l) == 0:
-                    break
+                    #This is the end of the file, let's signal that we found it
+                    return False
                 if l.find("arm") != -1:
                     jvals_str = l.split(":")[1]
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
@@ -603,7 +604,7 @@ class PR2JointMover(object):
                     jvals = map(lambda x: float(x),jvals_str.strip("\n").split(","))
                     self.target_head = jvals
                 if l.find("torso") != -1:
-                    self.target_torso = float(l.split(":")[1])
+                    self.target_torso = [float(l.split(":")[1])]
                 if l.find("time") != -1:
                     self.time_to_reach = float(l.split(":")[1])                    
                 if l.find("label") != -1:
@@ -634,9 +635,19 @@ class PR2JointMover(object):
             self.target_head = self.robot_state.head_positions
             self.target_left_arm = self.robot_state.left_arm_positions
             self.target_right_arm = self.robot_state.right_arm_positions
+            
             self.target_left_gripper = self.robot_state.l_gripper_positions
+            if type(self.target_left_gripper) is not list:
+                self.target_left_gripper = [self.target_left_gripper]
+            
             self.target_right_gripper = self.robot_state.r_gripper_positions
+            if type(self.target_right_gripper) is not list:
+                self.target_right_gripper = [self.target_right_gripper]
+            
             self.target_torso = self.robot_state.torso_position
+            if type(self.target_torso) is not list:
+                self.target_torso = [self.target_torso]
+            
         else:
             self.target_head = []
             for name in self.robot_state.head_joint_names:
@@ -698,31 +709,39 @@ class PR2JointMover(object):
         else:
             f = bfile
         
-        f.write("l_arm:")
-        f.write(", ".join(str(i) for i in self.target_left_arm))
-        f.write("\n")
+        if len(self.target_left_arm) > 0:
+            f.write("l_arm:")
+            f.write(", ".join(str(i) for i in self.target_left_arm))
+            f.write("\n")
         
-        f.write("r_arm:")
-        f.write(", ".join(str(i) for i in self.target_right_arm))
-        f.write("\n")
+        if len(self.target_right_arm) > 0:
+            f.write("r_arm:")
+            f.write(", ".join(str(i) for i in self.target_right_arm))
+            f.write("\n")
         
-        f.write("l_gripper:")
-        f.write(", ".join(str(i) for i in self.target_left_gripper))
-        f.write("\n")
-        
-        f.write("r_gripper:")
-        f.write(", ".join(str(i) for i in self.target_right_gripper))
-        f.write("\n")
-        
-        f.write("head:")
-        f.write(", ".join(str(i) for i in self.target_head))
-        f.write("\n")
-        
-        f.write("torso:")
-        f.write(", ".join(str(i) for i in self.target_torso))
-        f.write("\n")
+        if len(self.target_left_gripper) > 0:
+            f.write("l_gripper:")
+            f.write(", ".join(str(i) for i in self.target_left_gripper))
+            f.write("\n")
+
+        if len(self.target_right_gripper) > 0:        
+            f.write("r_gripper:")
+            f.write(", ".join(str(i) for i in self.target_right_gripper))
+            f.write("\n")
+
+        if len(self.target_head) > 0:        
+            f.write("head:")
+            f.write(", ".join(str(i) for i in self.target_head))
+            f.write("\n")
+
+        if len(self.target_torso) > 0:        
+            f.write("torso:")
+            f.write(", ".join(str(i) for i in self.target_torso))
+            f.write("\n")
         
         f.write("time: %f\n"% self.time_to_reach)
+        f.write("label: %s\n" % self.name)
+        
 
 class PosesSet(object):
     '''
@@ -764,21 +783,25 @@ def test_move_torso():
     state = RobotState()
     mover = PR2JointMover(state)
     
-    mover.set_torso_state(0.2,wait=True)
+    mover.set_torso_state(0.1,wait=True)
     
     mover.store_targets()
-    mover.write_targets("/home/pezzotto/tmp.stack")
+#    mover.write_targets("/home/pezzotto/tmp.stack")
     
 def test_open_file():
     state = RobotState()
     mover = PR2JointMover(state)
     
-    mover.parse_bookmark_file("/home/pezzotto/tmp.stack")
-    mover.execute_and_wait()
     mover.clear_targets()
     mover.parse_bookmark_file("/home/pezzotto/grasp_pos_big_table.stack")
     mover.execute_and_wait()
+
+def test_save_file():
+    state = RobotState()
+    mover = PR2JointMover(state)
     
+    mover.store_targets()
+            
     
 def prepare_coffee():
     state = RobotState()
@@ -810,8 +833,8 @@ if __name__ == "__main__":
     import os
     
     rospy.init_node('trytest', anonymous=True)
-#    test_move_torso()
-    test_open_file()
+    test_move_torso()
+#    test_open_file()
     
     rospy.loginfo("Done")
     while not rospy.is_shutdown():
