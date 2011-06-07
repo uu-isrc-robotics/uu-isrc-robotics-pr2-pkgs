@@ -39,9 +39,11 @@ from geometry_msgs.msg import Twist, Pose, PoseStamped, TwistStamped, PointStamp
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pr2_controllers_msgs.msg import *
-from motion_planning_msgs.srv import (FilterJointTrajectoryWithConstraints,
-                                      FilterJointTrajectoryWithConstraintsRequest, 
-                                      FilterJointTrajectoryWithConstraintsResponse)
+#from motion_planning_msgs.srv import (FilterJointTrajectoryWithConstraints,
+#                                      FilterJointTrajectoryWithConstraintsRequest, 
+#                                      FilterJointTrajectoryWithConstraintsResponse)
+
+from xml.dom import minidom
 
 class RobotState(object):
     '''
@@ -89,6 +91,7 @@ class RobotState(object):
         self.l_gripper_positions = []
         self.r_gripper_positions = []
         self.torso_position = []
+        self.joint_limits = {}
         
         self.r_arm_client = actionlib.SimpleActionClient("r_arm_controller/joint_trajectory_action", JointTrajectoryAction)        
         self.l_arm_client = actionlib.SimpleActionClient("l_arm_controller/joint_trajectory_action", JointTrajectoryAction)
@@ -98,15 +101,15 @@ class RobotState(object):
         self.head_pointer_client = actionlib.SimpleActionClient("head_traj_controller/point_head_action", PointHeadAction)
         self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)
         
-        rospy.loginfo("Waiting for trajectory filter service")
-        try:
-            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
-        except rospy.ROSException:
-            rospy.logwarn("No trajectory server found!")
-            self.filter_service = None
-        else:
-            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
-                                                 FilterJointTrajectoryWithConstraints)
+#        rospy.loginfo("Waiting for trajectory filter service")
+#        try:
+#            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
+#        except rospy.ROSException:
+#            rospy.logwarn("No trajectory server found!")
+#            self.filter_service = None
+#        else:
+#            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
+#                                                 FilterJointTrajectoryWithConstraints)
         
         # Some seemingly very important waits........
         rospy.loginfo("Waiting for joint trajectory actions")
@@ -126,6 +129,31 @@ class RobotState(object):
         
         rospy.loginfo("Robot State is ready")
     
+    def read_joint_limits(self):
+        urdf = rospy.get_param("robot_description")
+        try:
+            urdf_doc = minidom.parseString(urdf)
+        except IOError, e:
+            rospy.loginfo("robot_description failed to parse. Are you sure it valid?\nError is: %s" %e)
+            return
+        
+        joints = urdf_doc.getElementsByTagName('joint')
+        for jnt in joints:
+            name = jnt.attributes['name'].value
+            
+            lims = jnt.getElementsByTagName('limit')
+            if len(lims) == 0:
+                continue
+    
+            lower = lims[0].getAttribute('lower')
+            upper = lims[0].getAttribute('upper')
+    
+            # Ignore joints with no limits
+            if lower == '' or upper == '':
+                continue
+    
+            self.joint_limits[name] = (float(lower), float(upper))
+            
     def __getstate__(self):
         '''
         Used for pickle.
@@ -400,9 +428,10 @@ class PR2JointMover(object):
         
         if wait:
             client.wait_for_result()
-            
-    def execute_trajectory(self, trajectory, arm, wait=False):
+    
+    def execute_trajectory(self, trajectory, times, vels, arm, wait=False):
         command = JointTrajectory()
+        command.header.stamp = rospy.get_rostime() + rospy.Duration(0.05)
         command.joint_names = ['%s_shoulder_pan_joint' % arm[0], 
                                '%s_shoulder_lift_joint' % arm[0],
                                '%s_upper_arm_roll_joint' % arm[0],
@@ -413,32 +442,23 @@ class PR2JointMover(object):
         
         if arm[0] == "l":
             client = self.l_arm_client
-            self.l_arm_done = False
+            self.l_arm_done = False            
         elif arm[0] == "r":
             client = self.r_arm_client
             self.r_arm_done = False
             
-        for jvals in trajectory:
+        for jvals,t,v in zip(trajectory, times, vels):            
             command.points.append(JointTrajectoryPoint(
-                                positions=jvals,
-                                velocities = [],
-                                accelerations = [],
-                                time_from_start =  rospy.Duration(0)))
-        #command.header.stamp = rospy.Time.now()
+                                positions = jvals,
+                                velocities = v,
+                                accelerations = []*7,
+                                time_from_start =  rospy.Duration(t)))
+        command.header.stamp = rospy.Time.now()
 
         
-        rospy.loginfo("Sending request to trajectory filter")
-        req = FilterJointTrajectoryWithConstraintsRequest()
-        req.trajectory = command
-        req.allowed_time = rospy.Duration(1.)
-        reply = self.filter_service.call(req)
-        
-        if reply.error_code.val != reply.error_code.SUCCESS:
-            rospy.logerr("Filter trajectory returns %d"%reply.error_code.val)
-            return
 
         goal = JointTrajectoryGoal()
-        goal.trajectory = reply.trajectory
+        goal.trajectory = command
         
         if arm[0] == "l":
             client.send_goal(goal, done_cb=self.__l_arm_done_cb)       
@@ -449,11 +469,11 @@ class PR2JointMover(object):
             client.wait_for_result()
 
     def close_right_gripper(self, wait=False):
-        self.set_gripper_state([0.025307], "r",wait)    
+        self.set_gripper_state([0.00], "r",wait)    
     def open_right_gripper(self, wait=False):
         self.set_gripper_state([0.090474], "r",wait)
     def close_left_gripper(self, wait=False):
-        self.set_gripper_state([0.025307], "l",wait)    
+        self.set_gripper_state([0.00], "l",wait)    
     def open_left_gripper(self, wait=False):
         self.set_gripper_state([0.090474], "l",wait)
 
@@ -518,19 +538,16 @@ class PR2JointMover(object):
         except:
             rospy.logerr("failed to publish head position!")
 
-    def point_head_gripper(self, gripper):
+    def point_head_to(self, position, frame):
         goal = PointHeadGoal()
-        if gripper == "l_gripper":
-            goal.target.header.frame_id = "l_wrist_roll_link"
-        else:
-            goal.target.header.frame_id = "r_wrist_roll_link"
         
-        goal.pointing_frame = "head_plate_frame"
-        goal.target.point.x = 0
-        goal.target.point.y = 0
-        goal.target.point.z = 0
+        goal.target.header.frame_id =  frame
+        goal.target.point.x = position[0]
+        goal.target.point.y = position[1]
+        goal.target.point.z = position[2]
+        goal.min_duration = rospy.Duration(self.time_to_reach)
         
-        self.head_pointer_client.send_goal_and_wait(goal, rospy.Duration(2.0))
+        self.head_pointer_client.send_goal_and_wait(goal, rospy.Duration(self.time_to_reach))
 
     def set_torso_state(self, jval, wait=False):
         """ Sets goal for torso using provided value"""
@@ -633,11 +650,11 @@ class PR2JointMover(object):
         self.__target_left_gripper = []
         self.__target_torso = []
         
-    def store_targets(self, jstate=False):
+    def store_targets(self, jstate=None):
         '''
         Store the current joints as a target
         '''
-        if not jstate:
+        if jstate is None:
             self.target_head = self.robot_state.head_positions
             self.target_left_arm = self.robot_state.left_arm_positions
             self.target_right_arm = self.robot_state.right_arm_positions            
@@ -957,13 +974,19 @@ def prepare_coffee():
     dance2_mover.execute_and_wait()
     dance2_mover.spin_wrists(10)
 
+def test_joint_limits():
+    state = RobotState()
+    state.read_joint_limits()
+    rospy.loginfo("Limits: %s" %str(state.joint_limits))
 
 if __name__ == "__main__":
     import os
     
     rospy.init_node('trytest', anonymous=True)
-    test_move_torso()
+#    test_move_torso()
 #    test_open_file()
+
+    test_joint_limits()
     
     rospy.loginfo("Done")
     while not rospy.is_shutdown():
