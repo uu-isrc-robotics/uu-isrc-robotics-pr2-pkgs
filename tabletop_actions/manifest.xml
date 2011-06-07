@@ -1,0 +1,23 @@
+<package>
+  <description brief="tabletop_actions">
+
+     A set of actions to push, topple or otherwise interact with objects detected using the tabletop nodes.
+
+  </description>
+  <author>Lorenzo Riano</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/tabletop_actions</url>
+  <depend package="actionlib"/>
+  <depend package="object_manipulation_msgs"/>
+  <depend package="tabletop_object_detector"/>
+  <depend package="tabletop_collision_map_processing"/>
+  <depend package="rospy"/>
+  <depend package="roslib"/>
+  <depend package="visualization_msgs"/>
+  <depend package="pr2_control_utilities"/>
+  <depend package="dynamic_reconfigure"/>
+
+</package>
+
+
