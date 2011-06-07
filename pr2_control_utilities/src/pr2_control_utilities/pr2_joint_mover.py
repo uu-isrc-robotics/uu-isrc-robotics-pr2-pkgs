@@ -39,9 +39,9 @@ from geometry_msgs.msg import Twist, Pose, PoseStamped, TwistStamped, PointStamp
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pr2_controllers_msgs.msg import *
-#from motion_planning_msgs.srv import (FilterJointTrajectoryWithConstraints,
-#                                      FilterJointTrajectoryWithConstraintsRequest, 
-#                                      FilterJointTrajectoryWithConstraintsResponse)
+from motion_planning_msgs.srv import (FilterJointTrajectoryWithConstraints,
+                                      FilterJointTrajectoryWithConstraintsRequest, 
+                                      FilterJointTrajectoryWithConstraintsResponse)
 
 from xml.dom import minidom
 
@@ -101,15 +101,15 @@ class RobotState(object):
         self.head_pointer_client = actionlib.SimpleActionClient("head_traj_controller/point_head_action", PointHeadAction)
         self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)
         
-#        rospy.loginfo("Waiting for trajectory filter service")
-#        try:
-#            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
-#        except rospy.ROSException:
-#            rospy.logwarn("No trajectory server found!")
-#            self.filter_service = None
-#        else:
-#            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
-#                                                 FilterJointTrajectoryWithConstraints)
+        rospy.loginfo("Waiting for trajectory filter service")
+        try:
+            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
+        except rospy.ROSException:
+            rospy.logwarn("No trajectory server found!")
+            self.filter_service = None
+        else:
+            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
+                                                 FilterJointTrajectoryWithConstraints)
         
         # Some seemingly very important waits........
         rospy.loginfo("Waiting for joint trajectory actions")
