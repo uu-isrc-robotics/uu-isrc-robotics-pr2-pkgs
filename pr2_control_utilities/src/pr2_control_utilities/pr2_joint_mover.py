@@ -102,14 +102,14 @@ class RobotState(object):
         self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)
         
         rospy.loginfo("Waiting for trajectory filter service")
-        try:
-            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
-        except rospy.ROSException:
-            rospy.logwarn("No trajectory server found!")
-            self.filter_service = None
-        else:
-            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
-                                                 FilterJointTrajectoryWithConstraints)
+#        try:
+#            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
+#        except rospy.ROSException:
+#            rospy.logwarn("No trajectory server found!")
+#            self.filter_service = None
+#        else:
+#            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
+#                                                 FilterJointTrajectoryWithConstraints)
         
         # Some seemingly very important waits........
         rospy.loginfo("Waiting for joint trajectory actions")
@@ -238,7 +238,7 @@ class PR2JointMover(object):
         self.head_pointer_client = robot_state.head_pointer_client
         self.head_client = robot_state.head_client 
         self.torso_client = robot_state.torso_client
-        self.filter_service = robot_state.filter_service
+#        self.filter_service = robot_state.filter_service
                 
         self.__target_left_arm = []
         self.__target_right_arm = []
@@ -279,7 +279,7 @@ class PR2JointMover(object):
         self.l_gripper_client = self.robot_state.l_gripper_client 
         self.head_pointer_client = self.robot_state.head_pointer_client
         self.head_client = self.robot_state.head_client
-        self.filter_service = self.robot_state.filter_service
+#        self.filter_service = self.robot_state.filter_service
         
         self.l_arm_done = False
         self.r_arm_done = False
@@ -315,13 +315,7 @@ class PR2JointMover(object):
         Move to all the joint positions as previously read using parse_bookmark_file
         '''
         rospy.loginfo("Executing mover %s"%self.name)
-#        self.l_arm_done = False
-#        self.r_arm_done = False
-#        self.l_gripper_done = False
-#        self.r_gripper_done = False
-#        self.torso_done = False
-#        self.head_done = True
-                
+
         self.set_arm_state(self.__target_left_arm, 'l_arm')
         self.set_arm_state(self.__target_right_arm, 'r_arm')
         self.set_head_state(self.__target_head)
@@ -430,6 +424,17 @@ class PR2JointMover(object):
             client.wait_for_result()
     
     def execute_trajectory(self, trajectory, times, vels, arm, wait=False):
+        '''
+        Executes a trajectory. It does not check if the trajectory is safe, nor it performs
+        any interpolation or smoothing! times and vels can be obtained from ik_utils with the method
+        @trajectory_times_and_vels
+        
+        @param trajectory: a list of lists of joints
+        @param times: a list a times for each element in the trajectory.
+        @param vels: a list of velocities for each element in the trajectory 
+        @param arm: either "left" or "right"
+        @param wait: if this call should block until the trajectory is over
+        '''
         command = JointTrajectory()
         command.header.stamp = rospy.get_rostime() + rospy.Duration(0.05)
         command.joint_names = ['%s_shoulder_pan_joint' % arm[0], 

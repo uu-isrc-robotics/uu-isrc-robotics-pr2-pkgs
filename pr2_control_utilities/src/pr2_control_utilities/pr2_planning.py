@@ -166,7 +166,7 @@ class PR2MoveArm(object):
         
         current_pose_stamped = ik.run_fk(self.joint_mover.robot_state.right_arm_positions,
                                               link_name)
-        end_pose = self.ik.lists_to_pose_stamped(position, 
+        end_pose = ik.lists_to_pose_stamped(position, 
                                                  orientation, 
                                                  frame_id, 
                                                  frame_id)
