@@ -150,7 +150,7 @@ if __name__ == "__main__":
     rospy.init_node(PKG, anonymous=True)
     robot_state = RobotState()
     kinematics = KinematicsLoader(robot_state)
-    pos, angles = kinematics.get_left_arm_pose_euler()
+    pos, angles = kinematics.get_right_arm_pose_euler()
     
     print "Left arm"
     print "Pos: ", pos
