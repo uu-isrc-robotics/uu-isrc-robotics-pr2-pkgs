@@ -1,57 +1,66 @@
-import tabletop_actions
+#import tabletop_actions
 import rospy
 
 from object_manipulation_msgs.srv import FindClusterBoundingBox, FindClusterBoundingBoxRequest
 from tabletop_object_detector.srv import TabletopDetection, TabletopDetectionRequest
-from tabletop_object_detector.srv import TabletopSegmentation, TabletopSegmentationRequest
-
-import dynamic_reconfigure.client
+#from tabletop_object_detector.srv import TabletopSegmentation, TabletopSegmentationRequest
+from tabletop_collision_map_processing.srv import TabletopCollisionMapProcessing, TabletopCollisionMapProcessingRequest
 
 import random
+from rospy.service import ServiceException
 
 class ObjectDetector(object):
     def __init__(self):
         
         narrow_detector = "object_detection"        
         rospy.loginfo("waiting for %s service" % narrow_detector)
+        rospy.wait_for_service(narrow_detector)
         self.narrow_detector =  rospy.ServiceProxy(narrow_detector, TabletopDetection)
         
-        wide_detector = "wide_tabletop_segmentation"        
+        wide_detector = "wide_object_detection"        
         rospy.loginfo("waiting for %s service" % wide_detector)
-        self.wide_detector =  rospy.ServiceProxy(wide_detector, TabletopSegmentation)
+        rospy.wait_for_service(wide_detector)
+        self.wide_detector =  rospy.ServiceProxy(wide_detector, TabletopDetection)
         
         box_detector = "find_cluster_bounding_box"
         rospy.loginfo("waiting for %s service" % box_detector)
+        rospy.wait_for_service(box_detector)
         self.box_detector =  rospy.ServiceProxy(box_detector, FindClusterBoundingBox)
+        
+        collision_processing = "/tabletop_collision_map_processing/tabletop_collision_map_processing"
+        rospy.loginfo("Waiting for collision processing service to come up") 
+        rospy.wait_for_service(collision_processing)
+        self.collision_processing = rospy.ServiceProxy(collision_processing, TabletopCollisionMapProcessing)
         
         self.last_wide_msg = None
         self.last_narrow_msg = None
         self.last_box_msg = None
-        
-    def detect_narrow(self):
+        self.last_collision_processing_msg = None
+
+        rospy.loginfo("ObjectDetector is ready")
+
+    
+    def __detect(self, detector):
         req = TabletopDetectionRequest()
-        req.return_clusters = 1
-        req.return_models = 0        
+        req.return_clusters = True
+        req.return_models = True   
         try:
-            self.last_narrow_msg = self.narrow_detector(req)
+            reply = detector(req)
         except rospy.ServiceException, e:
             rospy.logerr("error when calling object_detection: %s"%e)
             return None
-        if self.last_narrow_msg.detection.result != self.last_narrow_msg.detection.SUCCESS:
-            self.last_narrow_msg = None
-        if len(self.last_narrow_msg.detection.clusters) == 0:
-            self.last_narrow_msg = None
+        if reply.detection.result != reply.detection.SUCCESS:
+            return None
+        if len(reply.detection.clusters) == 0:
+            return None
+        return reply
+        
+    def detect_narrow(self):        
+        self.last_narrow_msg = self.__detect(self.narrow_detector)
         return self.last_narrow_msg
     
     def detect_wide(self):
-        req = TabletopSegmentationRequest()
-        try:
-            self.last_wide_msg = self.wide_detector(req)
-        except rospy.ServiceException, e:
-            rospy.logerr("error when calling object_detection: %s"%e)
-            return None
-        if self.last_wide_msg.result != self.last_wide_msg.SUCCESS:
-            self.last_wide_msg
+        self.last_wide_msg = self.__detect(self.wide_detector)        
         return self.last_wide_msg
     
     def find_biggest_cluster(self, clusters = None):
@@ -94,29 +103,57 @@ class ObjectDetector(object):
         rospy.loginfo("Using object %d with %d points"%(index, len(object_cluster.points))) 
         return object_cluster
     
-    def detect_bounding_box(self, cluster = None, use_random = False):
+    def call_collision_map_processing(self, detection_result):
         
+        if detection_result is None:
+            rospy.logerr("Error: using a None detection_result")
+            return None
+        
+        rospy.loginfo("Calling collision map processing")
+        processing_call = TabletopCollisionMapProcessingRequest()    
+        processing_call.detection_result = detection_result.detection
+    #    ask for the exising map and collision models to be reset
+        processing_call.reset_attached_models = True
+        processing_call.reset_collision_models = True
+        processing_call.reset_static_map = True
+    #    after the new models are added to the environment
+        processing_call.take_static_collision_map = True
+        processing_call.desired_frame = "base_link"
+        
+        try:
+            self.last_collision_processing_msg = self.collision_processing.call(processing_call)
+        except ServiceException, e:
+            rospy.logerr("Error calling collision map: %s" % str(e))
+            self.last_collision_processing_msg = None
+        return self.last_collision_processing_msg
+    
+    def try_to_detect(self):
+        rospy.loginfo("Trying the narrow stereo...")
+        res_narrow = self.detect_narrow()
+        if res_narrow is None:
+            rospy.logwarn("No luck with narrow stereo, trying the wide one")
+            res_wide = self.detect_wide()
+            return res_wide
+        else:
+            return res_narrow
+
+    
+    def detect_bounding_box(self, cluster = None, use_random = False, detection_result = None):        
         if use_random:
             finder = self.find_random_cluster
         else:
             finder = self.find_biggest_cluster 
         
-        if cluster is None:
-            rospy.loginfo("Trying the narrow stereo...")
-            res_narrow = self.detect_narrow()
-            if res_narrow is None:
-                rospy.logwarn("No luck with narrow stereo, trying the wide one")
-                res_wide = self.detect_wide()
-                if res_wide is None:
-                    return None
-                else:
-                    cluster = finder(res_wide.clusters)
-            else:
-                cluster = finder(res_narrow.detection.clusters)
+        if cluster is None:            
+            detection_result = self.try_to_detect()
+            if detection_result is None:
+                rospy.logerr("No way there is an object in front of me!")
+                self.last_box_msg = None
+                return None
+            cluster = finder(detection_result.detection.clusters)
         
-        if cluster is None: #even after the perception!
-            rospy.logerr("No way there is an object in front of me!")
-            return None        
+        if self.call_collision_map_processing(detection_result) is None:
+            return None
         
         req = FindClusterBoundingBoxRequest()
         req.cluster = cluster
@@ -133,17 +170,19 @@ class ObjectDetector(object):
     
     def point_head_at(self, mover, box_msg = None, use_random = False):
         if box_msg is None:
-            res = self.detect_wide()
-            if res.result != res.SUCCESS:
+#            res = self.detect_wide()
+            res = self.try_to_detect()
+            if res is None:
                 rospy.logerr("No object found!")
                 return False
-            clusters = res.clusters 
+            clusters = res.detection.clusters 
             
             if use_random:
                 object_cluster = self.find_random_cluster(clusters)
             else:
                 object_cluster = self.find_biggest_cluster(clusters) 
-            box_msg = self.detect_bounding_box(object_cluster)
+            box_msg = self.detect_bounding_box(cluster = object_cluster, 
+                                               detection_result = res)
         
         if box_msg is None:
             return False
@@ -153,14 +192,3 @@ class ObjectDetector(object):
         frame = box_msg.pose.header.frame_id
         mover.point_head_to(position, frame)
         return True 
-        
-    def switch_narrow_projector(self, on = True):
-        client = dynamic_reconfigure.client.Client("camera_synchronizer_node")
-        
-        if on:
-            rospy.loginfo("Switching the projector on")
-            params = {"projector_mode": 3, "narrow_stereo_trig_mode" :5}
-        else:
-            rospy.loginfo("Switching the projector off")
-            params = {"projector_mode": 1}
-        client.update_configuration(params)

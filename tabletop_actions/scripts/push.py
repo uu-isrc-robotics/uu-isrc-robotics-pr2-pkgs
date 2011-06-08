@@ -1,4 +1,5 @@
 #! /usr/bin/python
+from codecs import ignore_errors
 PKG="tabletop_actions"
 
 import roslib
@@ -51,7 +52,7 @@ def push(robot_state, mover, pusher_l, pusher_r, detector):
         rospy.loginfo("Using the right pusher")
         pusher = pusher_r        
     
-    if not pusher.push_object(box):
+    if not pusher.push_object(box, ignore_errors=False):
         return getout("Something when wrong when pushing")
         
     
@@ -73,9 +74,7 @@ def push(robot_state, mover, pusher_l, pusher_r, detector):
 #    rospy.loginfo("Done")
 
 def main1():
-    if len(sys.argv) != 2:
-        return getout("Usage: %s [left|right]" % (sys.argv[0]))
-    
+
     robot_state = pr2_control_utilities.RobotState()
     mover = pr2_control_utilities.PR2JointMover(robot_state)
     planner = pr2_control_utilities.PR2MoveArm(mover)
@@ -101,5 +100,5 @@ def main2():
 
 if __name__ == "__main__":
     rospy.init_node(PKG, anonymous=True)
-    main2()
+    main1()
     

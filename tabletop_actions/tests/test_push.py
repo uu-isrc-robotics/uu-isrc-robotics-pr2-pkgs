@@ -133,9 +133,9 @@ def get_circular_pushing_poses(box_msg, num_points, z_offset = 0):
     return poses
 
 def get_linear_pushing_poses(box_msg, z_offset = 0):
-    boxpose = (box.pose.pose.position.x,
-               box.pose.pose.position.y,
-               box.pose.pose.position.z)
+    boxpose = (box_msg.pose.pose.position.x,
+               box_msg.pose.pose.position.y,
+               box_msg.pose.pose.position.z)
     
     start_push = (boxpose[0],
                   boxpose[1] -0.25,

@@ -27,7 +27,7 @@ class Pusher(object):
         else:
             self.pre_pushing_pose  = pre_pushing_pose
         
-    def push_object(self, box_msg):
+    def push_object(self, box_msg, ignore_errors = True):
         
         if self.which_arm() == "right_arm":
             move_arm = self.planner.move_right_arm
@@ -60,6 +60,7 @@ class Pusher(object):
         
         #moving to pre_push position
         self.mover.close_right_gripper(True)
+        self.mover.close_left_gripper(True)
         start_push = traj_poses[0]
         
         if move_arm(start_push, traj_angles, frame, waiting_time = 30, 
@@ -78,7 +79,7 @@ class Pusher(object):
                                              whole_angles, 
                                              frame, 
                                              max_vel = 0.4,
-                                             ignore_errors=True,
+                                             ignore_errors=ignore_errors,
                                              ):
             rospy.loginfo("Pushing ok")
         else:
@@ -171,8 +172,8 @@ class RightArmPusher(Pusher):
         boxangle = math.atan2(boxpose[1], boxpose[0])
         boxdist = math.sqrt(boxpose[0]*boxpose[0] + boxpose[1]*boxpose[1])
         
-        angle_start = boxangle - math.pi/8.0
-        angle_end = boxangle + math.pi/8.0
+        angle_start = boxangle - math.pi/20.0
+        angle_end = boxangle + math.pi/20.0
         poses = []
         all_angles = numpy.linspace(angle_start, angle_end, self.traj_points, endpoint=True)
         for alpha in all_angles:
@@ -209,8 +210,8 @@ class LeftArmPusher(Pusher):
         boxangle = math.atan2(boxpose[1], boxpose[0])
         boxdist = math.sqrt(boxpose[0]*boxpose[0] + boxpose[1]*boxpose[1])
         
-        angle_start = boxangle + math.pi/8.0
-        angle_end = boxangle - math.pi/8.0
+        angle_start = boxangle + math.pi/12.0
+        angle_end = boxangle - math.pi/12.0
         poses = []
         all_angles = numpy.linspace(angle_start, angle_end, self.traj_points, endpoint=True)
         for alpha in all_angles:
