@@ -191,3 +191,23 @@ class ObjectDetector(object):
         frame = box_msg.pose.header.frame_id
         mover.point_head_to(position, frame)
         return True 
+
+    def search_for_object(self, mover, trials = 1, use_random=True, 
+                          max_pan=0.4, min_pan=-0.4,
+                          max_tilt = 1.1, min_tilt = 0.8):    
+
+        #first try without moving        
+        if self.point_head_at(mover,use_random = use_random):
+            return True
+        trials -= 1
+        while trials > 0:
+            pan = random.uniform(min_pan, max_pan)
+            tilt = random.uniform(min_tilt, max_tilt)
+            mover.set_head_state((pan, tilt))
+            rospy.sleep(0.5)
+            
+            if self.point_head_at(mover,use_random = use_random):
+                return True
+            trials -= 1
+            
+            

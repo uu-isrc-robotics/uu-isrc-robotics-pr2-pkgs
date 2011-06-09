@@ -27,7 +27,7 @@ class Pusher(object):
         else:
             self.pre_pushing_pose  = pre_pushing_pose
         
-    def push_object(self, box_msg, ignore_errors = True):
+    def push_object(self, box_msg, ignore_errors = False):
         
         if self.which_arm() == "right_arm":
             move_arm = self.planner.move_right_arm
@@ -59,7 +59,7 @@ class Pusher(object):
             rospy.loginfo("Pushing trajectory is ok")
             trajectory, times, vels = res
         else:
-            self.__getout("The trajectory is not feasible", self.pre_pushing_pose)
+            return self.__getout("The trajectory is not feasible", self.pre_pushing_pose)
         
         
         #creating the allow_contacts_specification.. useless right now!
