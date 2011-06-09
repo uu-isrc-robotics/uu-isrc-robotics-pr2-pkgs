@@ -140,7 +140,7 @@ class ObjectDetector(object):
             return res_narrow
 
     
-    def detect_bounding_box(self, cluster = None, use_random = False, detection_result = None):        
+    def detect_bounding_box(self, cluster = None, use_random = False):        
         if use_random:
             finder = self.find_random_cluster
         else:
@@ -180,8 +180,7 @@ class ObjectDetector(object):
                 object_cluster = self.find_random_cluster(clusters)
             else:
                 object_cluster = self.find_biggest_cluster(clusters) 
-            box_msg = self.detect_bounding_box(cluster = object_cluster, 
-                                               detection_result = res)
+            box_msg = self.detect_bounding_box(cluster = object_cluster)
         
         if box_msg is None:
             return False
