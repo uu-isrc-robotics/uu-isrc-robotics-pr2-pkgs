@@ -53,10 +53,10 @@ class PR2BaseMover(object):
         self.min_rot = 0.1
         self.max_rot = 0.1
        
-    def drive_to_displacement(self, pos):
+    def drive_to_displacement(self, pos, inhibit_x = False, inhibit_y = False, inhibit_theta = False):
         '''
         Drive to the relative pos (diplacement)
-        @param pos: x,y,theta tuple        
+        @param pos: tuple: x,y,theta        
         '''
         
         self.listener.waitForTransform("base_footprint", "odom_combined",
@@ -78,11 +78,20 @@ class PR2BaseMover(object):
             (curr_trans, curr_rot) = self.listener.lookupTransform("base_footprint", 
                                                                    "odom_combined",
                                                                    rospy.Time(0))
-            dx = curr_trans[0] - desired_trans[0]
-            dy = curr_trans[1] - desired_trans[1]
-            dtheta = curr_rot[2] - desired_rot[2]
+            if not inhibit_x:
+                dx = curr_trans[0] - desired_trans[0]
+            else:
+                dx = 0
+            if not inhibit_y:
+                dy = curr_trans[1] - desired_trans[1]
+            else:
+                dy = 0
+            if not inhibit_theta:
+                dtheta = curr_rot[2] - desired_rot[2]
+            else:
+                dtheta = 0
             
-            rospy.loginfo("DX: %s"%str((dx,dy,dtheta)))
+#            rospy.loginfo("DX: %s"%str((dx,dy,dtheta)))
             
             if (math.fabs(dx) < 0.01 and
                 math.fabs(dy) < 0.01 and
@@ -121,7 +130,7 @@ class PR2BaseMover(object):
                 else:
                     base_cmd.angular.z = dtheta
             
-            rospy.loginfo("CMD: %s" % str(base_cmd))
+#            rospy.loginfo("CMD: %s" % str(base_cmd))
             self.cmd_vel_pub.publish(base_cmd)
             rate.sleep()
                             
