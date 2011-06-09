@@ -101,7 +101,7 @@ class RobotState(object):
         self.head_pointer_client = actionlib.SimpleActionClient("head_traj_controller/point_head_action", PointHeadAction)
         self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)
         
-        rospy.loginfo("Waiting for trajectory filter service")
+#        rospy.loginfo("Waiting for trajectory filter service")
 #        try:
 #            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
 #        except rospy.ROSException:
@@ -126,6 +126,8 @@ class RobotState(object):
         self.l_gripper_client.cancel_all_goals()
         self.head_pointer_client.cancel_all_goals()
         self.torso_client.cancel_all_goals()
+        
+        self.read_joint_limits()
         
         rospy.loginfo("Robot State is ready")
     
