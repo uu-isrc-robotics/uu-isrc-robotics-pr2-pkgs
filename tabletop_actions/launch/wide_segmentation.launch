@@ -1,7 +1,8 @@
 <launch>
+	<include file="$(find pr2_machine)/pr2.machine" />
 
 	<!-- segmentation -->
-    <node pkg="tabletop_object_detector" name="wide_tabletop_segmentation" type="tabletop_segmentation" respawn="true" output="screen">
+    <node pkg="tabletop_object_detector" name="wide_tabletop_segmentation" type="tabletop_segmentation" respawn="true" output="screen" machine="c2">
 	<!--topic remapping-->
         <remap from="cloud_in" to="wide_stereo/points2" />
         <remap from="segmentation_srv" to="wide_tabletop_segmentation" />
@@ -24,7 +25,7 @@
     </node>
 
 	<!-- object recognition -->
-	<node pkg="tabletop_object_detector" name="wide_object_recognition" type="tabletop_object_recognition" respawn="false" output="screen">
+	<node pkg="tabletop_object_detector" name="wide_object_recognition" type="tabletop_object_recognition" respawn="false" output="screen" machine="c2">
 	<!--operational parameters-->
 		<param name="fit_merge_threshold" value="0.05" />
 		<param name="min_marker_quality" value="0.003" />
@@ -41,7 +42,7 @@
         <param name="get_model_mesh_srv" value="/objects_database_node/get_model_mesh" />
     </node>
 
-    <node pkg="tabletop_object_detector" name="wide_tabletop_complete_node" type="tabletop_complete_node" respawn="true" output="screen">
+    <node pkg="tabletop_object_detector" name="wide_tabletop_complete_node" type="tabletop_complete_node" respawn="true" output="screen" machine="c2">
 	  <param name="perform_fit_merge" value="true" />
 	  <param name="recognition_srv"  value="wide_tabletop_object_recognition" />
 	  <param name="segmentation_srv" value="wide_tabletop_segmentation" />
