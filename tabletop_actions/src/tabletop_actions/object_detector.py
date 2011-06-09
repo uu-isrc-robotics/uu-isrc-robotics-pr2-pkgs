@@ -133,7 +133,8 @@ class ObjectDetector(object):
         if res_narrow is None:
             rospy.logwarn("No luck with narrow stereo, trying the wide one")
             res_wide = self.detect_wide()
-            self.call_collision_map_processing(res_wide)
+            if res_wide is not None:
+                self.call_collision_map_processing(res_wide)
             return res_wide
         else:
             self.call_collision_map_processing(res_narrow)
