@@ -197,30 +197,27 @@ class PR2MoveArm(object):
                                              frame_id, 
                                              ignore_errors)
     
-    def __move_arm_trajectory_non_collision(self,
-                                            arm,
-                                            positions, 
-                                            orientations, 
-                                            frame_id,
-                                            max_vel, 
-                                            ignore_errors = False
-                                            ):        
-        
+    def __create_trjectory_non_collision(self,
+                                         arm,
+                                         positions, 
+                                         orientations, 
+                                         frame_id,
+                                         max_vel, 
+                                         ignore_errors = False
+                                         ):
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.right_arm_positions
-            mover_arm = "right"
             ik = self.right_ik 
         elif arm == "left_arm":
             link_name = "l_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.left_arm_positions
-            mover_arm = "left" 
             ik = self.left_ik 
         else:
             rospy.logerr("Unknown arm: %s"%arm)
             return False
         
-        trajectory = [joint_angles]
+        trajectory = []
         for i in xrange(len(positions)):
             
             pose = ik.lists_to_pose_stamped(positions[i], 
@@ -236,8 +233,67 @@ class PR2MoveArm(object):
                 return False
             if e == "SUCCESS":
                 trajectory.append(joints)
+        
         trajectory = self.__normalize_trajectory(trajectory, joint_angles)
         (times, vels) = ik.trajectory_times_and_vels(trajectory, [max_vel]*7)
+        return (trajectory, times, vels)
+    
+    def create_right_arm_trjectory_non_collision(self,
+                                                 positions, 
+                                                 orientations, 
+                                                 frame_id,
+                                                 max_vel, 
+                                                 ignore_errors = False
+                                                 ):
+        return self.__create_trjectory_non_collision("right_arm", 
+                                                     positions, 
+                                                     orientations, 
+                                                     frame_id, 
+                                                     max_vel, 
+                                                     ignore_errors)
+    
+    def create_left_arm_trjectory_non_collision(self,
+                                                positions, 
+                                                orientations, 
+                                                frame_id,
+                                                max_vel, 
+                                                ignore_errors = False
+                                                ):
+        return self.__create_trjectory_non_collision("left_arm", 
+                                                     positions, 
+                                                     orientations, 
+                                                     frame_id, 
+                                                     max_vel, 
+                                                     ignore_errors)
+    
+    
+    def __move_arm_trajectory_non_collision(self,
+                                            arm,
+                                            positions, 
+                                            orientations, 
+                                            frame_id,
+                                            max_vel, 
+                                            ignore_errors = False
+                                            ):        
+        
+        if arm == "right_arm":
+            mover_arm = "right"
+        elif arm == "left_arm":
+            mover_arm = "left" 
+        else:
+            rospy.logerr("Unknown arm: %s"%arm)
+            return False
+        
+        res = self.__create_trjectory_non_collision(arm, 
+                                                    positions, 
+                                                    orientations, 
+                                                    frame_id, 
+                                                    max_vel, 
+                                                    ignore_errors)
+        
+        if res:
+            trajectory, times, vels = res 
+        
         self.joint_mover.execute_trajectory(trajectory, times, vels, mover_arm, True)
         return True
     
@@ -268,6 +324,7 @@ class PR2MoveArm(object):
                                                  frame_id, 
                                                  max_vel, 
                                                  ignore_errors)
+    
     
     ##normalize a trajectory (list of lists of joint angles), so that the desired angles 
     #are the nearest ones for the continuous joints (5 and 7)
