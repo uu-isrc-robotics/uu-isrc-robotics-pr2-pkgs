@@ -14,7 +14,7 @@ class Pusher(object):
     def __init__(self, planner, robot_state, pre_pushing_pose = None):
         super(Pusher, self).__init__()
         self.planner = planner
-        self.collision_objects__markers_pub = rospy.Publisher("circle_around__markers", 
+        self.collision_objects__markers_pub = rospy.Publisher("pusher_trajectory", 
                                                               Marker, 
                                                               latch=True)
         self.collision_objects_pub = rospy.Publisher("collision_object", CollisionObject)
@@ -172,8 +172,8 @@ class RightArmPusher(Pusher):
         boxangle = math.atan2(boxpose[1], boxpose[0])
         boxdist = math.sqrt(boxpose[0]*boxpose[0] + boxpose[1]*boxpose[1])
         
-        angle_start = boxangle - math.pi/20.0
-        angle_end = boxangle + math.pi/20.0
+        angle_start = boxangle - math.pi/12.0
+        angle_end = boxangle + math.pi/12.0
         poses = []
         all_angles = numpy.linspace(angle_start, angle_end, self.traj_points, endpoint=True)
         for alpha in all_angles:

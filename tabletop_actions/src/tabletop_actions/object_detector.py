@@ -133,8 +133,10 @@ class ObjectDetector(object):
         if res_narrow is None:
             rospy.logwarn("No luck with narrow stereo, trying the wide one")
             res_wide = self.detect_wide()
+            self.call_collision_map_processing(res_wide)
             return res_wide
         else:
+            self.call_collision_map_processing(res_narrow)
             return res_narrow
 
     
@@ -151,9 +153,6 @@ class ObjectDetector(object):
                 self.last_box_msg = None
                 return None
             cluster = finder(detection_result.detection.clusters)
-        
-        if self.call_collision_map_processing(detection_result) is None:
-            return None
         
         req = FindClusterBoundingBoxRequest()
         req.cluster = cluster
