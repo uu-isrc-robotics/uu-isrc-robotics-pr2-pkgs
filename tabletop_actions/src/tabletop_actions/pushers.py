@@ -32,9 +32,11 @@ class Pusher(object):
         if self.which_arm() == "right_arm":
             move_arm = self.planner.move_right_arm
             move_arm_trajectory_non_collision = self.planner.move_right_arm_trajectory_non_collision
+            trajectory_creator = self.planner.create_right_arm_trjectory_non_collision
         elif self.which_arm() == "left_arm":
             move_arm_trajectory_non_collision = self.planner.move_left_arm_trajectory_non_collision
             move_arm = self.planner.move_left_arm
+            trajectory_creator = self.planner.create_left_arm_trjectory_non_collision
         else:
             return self.__getout("Non existing arm being used!", self.pre_pushing_pose)
         
@@ -45,6 +47,22 @@ class Pusher(object):
         traj_angles = self.get_pushing_angles(box_msg)
         self.__draw_poses(traj_poses, frame)
         
+        
+        rospy.loginfo("Testing is pushing trajectory is feasible")
+        whole_angles = [traj_angles] * len(traj_poses)
+        res = trajectory_creator(traj_poses,
+                                 whole_angles,
+                                 frame,
+                                 max_vel=0.4,
+                                 ignore_errors=ignore_errors)
+        if res:
+            rospy.loginfo("Pushing trajectory is ok")
+            trajectory, times, vels = res
+        else:
+            self.__getout("The trajectory is not feasible", self.pre_pushing_pose)
+        
+        
+        #creating the allow_contacts_specification.. useless right now!
         object_id = "pushable_object"
         collision_object_msg = self.__build_object_from_box(box_msg, object_id)
         self.collision_objects_pub.publish(collision_object_msg)  
@@ -63,27 +81,20 @@ class Pusher(object):
         self.mover.close_left_gripper(True)
         start_push = traj_poses[0]
         
+        rospy.loginfo("Moving to pre-push")
         if move_arm(start_push, traj_angles, frame, waiting_time = 30, 
                                   ordered_collision_operations = collision_operation,
                                   allowed_contacts = allowed_contact_specification):
-            rospy.loginfo("Pre-grasping movement ok")
+            rospy.loginfo("Pre-push movement ok")
         else:
-            return self.__getout("Pre-grasping planning returned with an error", 
+            return self.__getout("Pre-push planning returned with an error", 
                                  self.pre_pushing_pose)
         
-        whole_angles = [traj_angles] * len(traj_poses)
+        
         self.planner.joint_mover.time_to_reach = 5.0
         self.mover.set_head_state(initial_head_position)
         rospy.loginfo("Starting the push")
-        if move_arm_trajectory_non_collision(traj_poses, 
-                                             whole_angles, 
-                                             frame, 
-                                             max_vel = 0.4,
-                                             ignore_errors=ignore_errors,
-                                             ):
-            rospy.loginfo("Pushing ok")
-        else:
-            return self.__getout("Pushing not done", self.pre_pushing_pose)
+        self.mover.execute_trajectory(trajectory, times, vels, self.which_arm(), True)
         
         rospy.loginfo("Moving back to the original place")
         self.pre_pushing_pose.time_to_reach = 10
@@ -91,7 +102,7 @@ class Pusher(object):
         
         return True
     
-    def __getout(self, msg, mover = None):        
+    def __getout(self, msg, mover = None):
         rospy.logerr(msg)
         if mover is not None:
             mover.execute_and_wait()
