@@ -21,24 +21,18 @@ class Pusher(object):
         self.robot_state = robot_state
         self.mover = pr2_control_utilities.PR2JointMover(robot_state)
         
-        if pre_pushing_pose is None:
-            self.pre_pushing_pose = pr2_control_utilities.PR2JointMover(self.robot_state)
-            self.pre_pushing_pose.store_targets()
-        else:
-            self.pre_pushing_pose  = pre_pushing_pose
-        
-    def push_object(self, box_msg, ignore_errors = False):
-        
+    def push_object(self, box_msg, ignore_errors = False, normalize = True):
+
         if self.which_arm() == "right_arm":
             move_arm = self.planner.move_right_arm
-            move_arm_trajectory_non_collision = self.planner.move_right_arm_trajectory_non_collision
+            pre_push_joints = self.robot_state.right_arm_positions[:]
             trajectory_creator = self.planner.create_right_arm_trjectory_non_collision
         elif self.which_arm() == "left_arm":
-            move_arm_trajectory_non_collision = self.planner.move_left_arm_trajectory_non_collision
             move_arm = self.planner.move_left_arm
+            pre_push_joints = self.robot_state.left_arm_positions[:]
             trajectory_creator = self.planner.create_left_arm_trjectory_non_collision
         else:
-            return self.__getout("Non existing arm being used!", self.pre_pushing_pose)
+            return self.__getout("Non existing arm being used!")
         
         initial_head_position = self.robot_state.head_positions[:]
         frame = box_msg.pose.header.frame_id
@@ -54,12 +48,13 @@ class Pusher(object):
                                  whole_angles,
                                  frame,
                                  max_vel=0.4,
-                                 ignore_errors=ignore_errors)
+                                 ignore_errors=ignore_errors,
+                                 normalize=normalize)
         if res:
             rospy.loginfo("Pushing trajectory is ok")
             trajectory, times, vels = res
         else:
-            return self.__getout("The trajectory is not feasible", self.pre_pushing_pose)
+            return self.__getout("The trajectory is not feasible")
         
         
         #creating the allow_contacts_specification.. useless right now!
@@ -87,25 +82,20 @@ class Pusher(object):
                                   allowed_contacts = allowed_contact_specification):
             rospy.loginfo("Pre-push movement ok")
         else:
-            return self.__getout("Pre-push planning returned with an error", 
-                                 self.pre_pushing_pose)
+            return self.__getout("Pre-push planning returned with an error")
         
         
         self.planner.joint_mover.time_to_reach = 5.0
         self.mover.set_head_state(initial_head_position)
         rospy.loginfo("Starting the push")
         self.mover.execute_trajectory(trajectory, times, vels, self.which_arm(), True)
-        
-        rospy.loginfo("Moving back to the original place")
-        self.pre_pushing_pose.time_to_reach = 10
-        self.pre_pushing_pose.execute_and_wait()
-        
+         
+        rospy.loginfo("Moving the %s back" % self.which_arm())
+        self.mover.set_arm_state(pre_push_joints,self.which_arm(),wait=True)
         return True
     
-    def __getout(self, msg, mover = None):
+    def __getout(self, msg):
         rospy.logerr(msg)
-        if mover is not None:
-            mover.execute_and_wait()
         return False
     
     def get_pushing_angles(self, box_msg):
@@ -162,7 +152,7 @@ class Pusher(object):
 class RightArmPusher(Pusher):
     def __init__(self, planner, robot_state, 
                  traj_points = 10, 
-                 traj_z_offset = 0.2):
+                 traj_z_offset = 0.16):
         super(RightArmPusher, self).__init__(planner, robot_state)
         
         self.traj_points = traj_points
@@ -199,7 +189,7 @@ class RightArmPusher(Pusher):
 class LeftArmPusher(Pusher):
     def __init__(self, planner, robot_state, 
                  traj_points = 10, 
-                 traj_z_offset = 0.2):
+                 traj_z_offset = 0.16):
         super(LeftArmPusher, self).__init__(planner, robot_state)
         
         self.traj_points = traj_points
