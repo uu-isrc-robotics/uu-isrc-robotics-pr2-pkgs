@@ -80,8 +80,8 @@ def main1():
     planner = pr2_control_utilities.PR2MoveArm(mover)
     detector = object_detector.ObjectDetector() 
     
-    pusher_l = pushers.LeftArmPusher(planner, robot_state)
-    pusher_r = pushers.RightArmPusher(planner, robot_state)
+    pusher_l = pushers.LeftArmCircularPusher(planner, robot_state)
+    pusher_r = pushers.RightArmCircularPusher(planner, robot_state)
     
     push(robot_state, mover, pusher_l, pusher_r, detector)
     
@@ -92,8 +92,8 @@ def main2():
     planner = pr2_control_utilities.PR2MoveArm(mover)
     detector = object_detector.ObjectDetector() 
     
-    pusher_l = pushers.LeftArmPusher(planner, robot_state)
-    pusher_r = pushers.RightArmPusher(planner, robot_state)
+    pusher_l = pushers.LeftArmCircularPusher(planner, robot_state)
+    pusher_r = pushers.RightArmCircularPusher(planner, robot_state)
     
     while not rospy.is_shutdown():
         push(robot_state, mover, pusher_l, pusher_r, detector)    

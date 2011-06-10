@@ -20,17 +20,22 @@ class Pusher(object):
         self.collision_objects_pub = rospy.Publisher("collision_object", CollisionObject)
         self.robot_state = robot_state
         self.mover = pr2_control_utilities.PR2JointMover(robot_state)
+        self.err_msg = ""
+
         
     def push_object(self, box_msg, ignore_errors = False, normalize = True):
 
+        self.err_msg = ""        
         if self.which_arm() == "right_arm":
             move_arm = self.planner.move_right_arm
             pre_push_joints = self.robot_state.right_arm_positions[:]
             trajectory_creator = self.planner.create_right_arm_trjectory_non_collision
+            trajectory_mover = self.planner.move_right_arm_trajectory_non_collision
         elif self.which_arm() == "left_arm":
             move_arm = self.planner.move_left_arm
             pre_push_joints = self.robot_state.left_arm_positions[:]
             trajectory_creator = self.planner.create_left_arm_trjectory_non_collision
+            trajectory_mover = self.planner.move_left_arm_trajectory_non_collision
         else:
             return self.__getout("Non existing arm being used!")
         
@@ -49,11 +54,12 @@ class Pusher(object):
                                  frame,
                                  max_vel=0.4,
                                  ignore_errors=ignore_errors,
-                                 normalize=normalize)
+                                 normalize=False)
         if res:
             rospy.loginfo("Pushing trajectory is ok")
-            trajectory, times, vels = res
+#            trajectory, times, vels = res
         else:
+            self.err_msg = "IK Error"
             return self.__getout("The trajectory is not feasible")
         
         
@@ -82,13 +88,27 @@ class Pusher(object):
                                   allowed_contacts = allowed_contact_specification):
             rospy.loginfo("Pre-push movement ok")
         else:
+            self.err_msg = "Planning Error"
             return self.__getout("Pre-push planning returned with an error")
         
         
         self.planner.joint_mover.time_to_reach = 5.0
         self.mover.set_head_state(initial_head_position)
         rospy.loginfo("Starting the push")
-        self.mover.execute_trajectory(trajectory, times, vels, self.which_arm(), True)
+        if not trajectory_mover(traj_poses,
+                         whole_angles,
+                         frame,
+                         max_vel=0.4,
+                         ignore_errors=ignore_errors,
+                         normalize=normalize):
+            rospy.logerr("Strangely something when wrong when actually pushing!")
+            rospy.loginfo("Moving the %s back" % self.which_arm())
+            self.mover.set_arm_state(pre_push_joints,self.which_arm(),wait=True)
+            self.err_msg = "IK Error"
+            return False
+            
+        
+#        self.mover.execute_trajectory(trajectory, times, vels, self.which_arm(), True)
          
         rospy.loginfo("Moving the %s back" % self.which_arm())
         self.mover.set_arm_state(pre_push_joints,self.which_arm(),wait=True)
@@ -99,13 +119,13 @@ class Pusher(object):
         return False
     
     def get_pushing_angles(self, box_msg):
-        raise exceptions.NotImplementedError("Do not use a Pusher class directly!")
+        raise exceptions.NotImplementedError("Do not use a %s class directly!" % self.__class__)
     
     def get_pushing_poses(self, box_msg):
-        raise exceptions.NotImplementedError("Do not use a Pusher class directly!")
+        raise exceptions.NotImplementedError("Do not use a %s class directly!" % self.__class__)    
     
     def which_arm(self):
-        raise exceptions.NotImplementedError("Do not use a Pusher class directly!")
+        raise exceptions.NotImplementedError("Do not use a %s class directly!" % self.__class__)
     
     def __draw_poses(self, poses, frame):
         rospy.loginfo("Drawing the poses")
@@ -149,15 +169,16 @@ class Pusher(object):
         msg.poses.append(box_msg.pose.pose)
         return msg
 
-class RightArmPusher(Pusher):
+class CircularPusher(Pusher):
     def __init__(self, planner, robot_state, 
                  traj_points = 10, 
-                 traj_z_offset = 0.16):
-        super(RightArmPusher, self).__init__(planner, robot_state)
-        
+                 traj_z_offset = 0.16,
+                 angles_resolution = math.pi/12.0):
+        super(CircularPusher, self).__init__(planner, robot_state)
         self.traj_points = traj_points
         self.traj_z_offset = traj_z_offset
-    
+        self.angles_resolution = angles_resolution
+        
     def get_pushing_angles(self, box_msg):
         #downward gripper
         euler_angles = (0., math.pi/2., math.pi/2.)
@@ -166,6 +187,17 @@ class RightArmPusher(Pusher):
                                                        euler_angles[2])
         return angles
     
+class RightArmCircularPusher(CircularPusher):
+    def __init__(self, planner, robot_state, 
+                 traj_points = 10, 
+                 traj_z_offset = 0.16,
+                 angles_resolution = math.pi/12.0):
+        super(RightArmCircularPusher, self).__init__(planner, 
+                                             robot_state,
+                                             traj_points,
+                                             traj_z_offset,
+                                             angles_resolution)
+        
     def get_pushing_poses(self, box_msg):
         boxpose = (box_msg.pose.pose.position.x,
                box_msg.pose.pose.position.y,
@@ -173,8 +205,8 @@ class RightArmPusher(Pusher):
         boxangle = math.atan2(boxpose[1], boxpose[0])
         boxdist = math.sqrt(boxpose[0]*boxpose[0] + boxpose[1]*boxpose[1])
         
-        angle_start = boxangle - math.pi/12.0
-        angle_end = boxangle + math.pi/12.0
+        angle_start = boxangle - math.pi/self.angles_resolution
+        angle_end = boxangle + math.pi/self.angles_resolution
         poses = []
         all_angles = numpy.linspace(angle_start, angle_end, self.traj_points, endpoint=True)
         for alpha in all_angles:
@@ -186,23 +218,16 @@ class RightArmPusher(Pusher):
     def which_arm(self):
         return "right_arm"
 
-class LeftArmPusher(Pusher):
+class LeftArmCircularPusher(CircularPusher):
     def __init__(self, planner, robot_state, 
                  traj_points = 10, 
-                 traj_z_offset = 0.16):
-        super(LeftArmPusher, self).__init__(planner, robot_state)
-        
-        self.traj_points = traj_points
-        self.traj_z_offset = traj_z_offset
-    
-    def get_pushing_angles(self, box_msg):
-        #downward gripper
-#        euler_angles = (0.,0., 0)
-        euler_angles = (0., math.pi/2., math.pi/2)
-        angles = transformations.quaternion_from_euler(euler_angles[0],
-                                                       euler_angles[1],
-                                                       euler_angles[2])
-        return angles
+                 traj_z_offset = 0.16,
+                 angles_resolution = math.pi/12.0):
+        super(LeftArmCircularPusher, self).__init__(planner, 
+                                             robot_state,
+                                             traj_points,
+                                             traj_z_offset,
+                                             angles_resolution)
     
     def get_pushing_poses(self, box_msg):
         boxpose = (box_msg.pose.pose.position.x,
@@ -211,8 +236,8 @@ class LeftArmPusher(Pusher):
         boxangle = math.atan2(boxpose[1], boxpose[0])
         boxdist = math.sqrt(boxpose[0]*boxpose[0] + boxpose[1]*boxpose[1])
         
-        angle_start = boxangle + math.pi/12.0
-        angle_end = boxangle - math.pi/12.0
+        angle_start = boxangle + math.pi/self.angles_resolution
+        angle_end = boxangle - math.pi/self.angles_resolution
         poses = []
         all_angles = numpy.linspace(angle_start, angle_end, self.traj_points, endpoint=True)
         for alpha in all_angles:
@@ -223,3 +248,77 @@ class LeftArmPusher(Pusher):
     
     def which_arm(self):
         return "left_arm"
+    
+class LateralPusher(Pusher):
+    def __init__(self, planner, robot_state, 
+                 traj_points, 
+                 traj_z_offset,
+                 linear_resolution):
+        super(LateralPusher, self).__init__(planner, robot_state)
+        self.traj_points = traj_points
+        self.traj_z_offset = traj_z_offset
+        self.linear_resolution = linear_resolution
+        
+    def get_pushing_angles(self, box_msg):
+        #downward gripper
+        euler_angles = (0., math.pi/2., math.pi/2.)
+        angles = transformations.quaternion_from_euler(euler_angles[0],
+                                                       euler_angles[1],
+                                                       euler_angles[2])
+        return angles
+    
+class LeftArmLateralPusher(LateralPusher):
+    def __init__(self, planner, robot_state, 
+                 traj_points = 10, 
+                 traj_z_offset = 0.18,
+                 linear_resolution = 0.20):
+        super(LeftArmLateralPusher, self).__init__(planner, 
+                                             robot_state,
+                                             traj_points,
+                                             traj_z_offset,
+                                             linear_resolution)
+    
+    def get_pushing_poses(self, box_msg):
+        boxpose = (box_msg.pose.pose.position.x,
+               box_msg.pose.pose.position.y,
+               box_msg.pose.pose.position.z)
+
+        poses = []
+        start_y = boxpose[1] + self.linear_resolution
+        end_y = boxpose[1] - self.linear_resolution
+        for y in numpy.linspace(start_y, end_y, self.traj_points, endpoint = True) :
+            poses.append((boxpose[0],
+                          y,
+                          boxpose[2] + self.traj_z_offset))
+        return poses
+    
+    def which_arm(self):
+        return "left_arm"
+    
+class RightArmLateralPusher(LateralPusher):
+    def __init__(self, planner, robot_state, 
+                 traj_points = 10, 
+                 traj_z_offset = 0.18,
+                 linear_resolution = 0.20):
+        super(RightArmLateralPusher, self).__init__(planner, 
+                                             robot_state,
+                                             traj_points,
+                                             traj_z_offset,
+                                             linear_resolution)
+    
+    def get_pushing_poses(self, box_msg):
+        boxpose = (box_msg.pose.pose.position.x,
+               box_msg.pose.pose.position.y,
+               box_msg.pose.pose.position.z)
+
+        poses = []
+        start_y = boxpose[1] - self.linear_resolution
+        end_y = boxpose[1] + self.linear_resolution
+        for y in numpy.linspace(start_y,end_y,self.traj_points, endpoint = True) :
+            poses.append((boxpose[0],
+                          y,
+                          boxpose[2] + self.traj_z_offset))
+        return poses
+    
+    def which_arm(self):
+        return "right_arm"
