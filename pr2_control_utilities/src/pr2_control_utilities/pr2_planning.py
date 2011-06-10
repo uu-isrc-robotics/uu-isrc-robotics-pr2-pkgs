@@ -203,8 +203,8 @@ class PR2MoveArm(object):
                                          orientations, 
                                          frame_id,
                                          max_vel, 
-                                         ignore_errors = False
-                                         ):
+                                         ignore_errors = False,
+                                         normalize = True):
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.right_arm_positions
@@ -234,7 +234,11 @@ class PR2MoveArm(object):
             if e == "SUCCESS":
                 trajectory.append(joints)
         
-        trajectory = self.__normalize_trajectory(trajectory, joint_angles)
+        if normalize:
+            rospy.loginfo("Normalising trajectory")
+            trajectory = self.__normalize_trajectory(trajectory, joint_angles)
+        else:
+            rospy.loginfo("Not normalising the trajectory")
         (times, vels) = ik.trajectory_times_and_vels(trajectory, [max_vel]*7)
         return (trajectory, times, vels)
     
@@ -243,28 +247,32 @@ class PR2MoveArm(object):
                                                  orientations, 
                                                  frame_id,
                                                  max_vel, 
-                                                 ignore_errors = False
+                                                 ignore_errors = False,
+                                                 normalize = True
                                                  ):
         return self.__create_trjectory_non_collision("right_arm", 
                                                      positions, 
                                                      orientations, 
                                                      frame_id, 
                                                      max_vel, 
-                                                     ignore_errors)
+                                                     ignore_errors,
+                                                     normalize)
     
     def create_left_arm_trjectory_non_collision(self,
                                                 positions, 
                                                 orientations, 
                                                 frame_id,
                                                 max_vel, 
-                                                ignore_errors = False
+                                                ignore_errors = False,
+                                                normalize = True
                                                 ):
         return self.__create_trjectory_non_collision("left_arm", 
                                                      positions, 
                                                      orientations, 
                                                      frame_id, 
                                                      max_vel, 
-                                                     ignore_errors)
+                                                     ignore_errors,
+                                                     normalize)
     
     
     def __move_arm_trajectory_non_collision(self,
@@ -273,8 +281,8 @@ class PR2MoveArm(object):
                                             orientations, 
                                             frame_id,
                                             max_vel, 
-                                            ignore_errors = False
-                                            ):        
+                                            ignore_errors = False,
+                                            normalize = True):        
         
         if arm == "right_arm":
             mover_arm = "right"
@@ -289,7 +297,8 @@ class PR2MoveArm(object):
                                                     orientations, 
                                                     frame_id, 
                                                     max_vel, 
-                                                    ignore_errors)
+                                                    ignore_errors,
+                                                    normalize)
         
         if res:
             trajectory, times, vels = res 
@@ -302,28 +311,32 @@ class PR2MoveArm(object):
                                                 orientations, 
                                                 frame_id,
                                                 max_vel, 
-                                                ignore_errors = False
+                                                ignore_errors = False,
+                                                normalize = True
                                                 ):
         return self.__move_arm_trajectory_non_collision("right_arm", 
                                                  positions, 
                                                  orientations, 
                                                  frame_id, 
                                                  max_vel, 
-                                                 ignore_errors)
+                                                 ignore_errors,
+                                                 normalize)
     
     def move_left_arm_trajectory_non_collision(self, 
                                                 positions, 
                                                 orientations, 
                                                 frame_id,
                                                 max_vel, 
-                                                ignore_errors = False
+                                                ignore_errors = False,
+                                                normalize = True,
                                                 ):
         return self.__move_arm_trajectory_non_collision("left_arm", 
                                                  positions, 
                                                  orientations, 
                                                  frame_id, 
                                                  max_vel, 
-                                                 ignore_errors)
+                                                 ignore_errors,
+                                                 normalize)
     
     
     ##normalize a trajectory (list of lists of joint angles), so that the desired angles 

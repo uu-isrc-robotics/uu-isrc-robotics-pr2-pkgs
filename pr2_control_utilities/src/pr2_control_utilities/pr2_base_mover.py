@@ -44,8 +44,9 @@ def sign(x):
         return -1.
 
 class PR2BaseMover(object):
-    def __init__(self):
+    def __init__(self):        
         self.listener = tf.TransformListener()
+        
         self.cmd_vel_pub = rospy.Publisher("/base_controller/command", Twist)
         
         self.max_vel = 0.25

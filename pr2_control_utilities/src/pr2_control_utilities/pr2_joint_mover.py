@@ -101,16 +101,6 @@ class RobotState(object):
         self.head_pointer_client = actionlib.SimpleActionClient("head_traj_controller/point_head_action", PointHeadAction)
         self.head_client = rospy.Publisher('/head_traj_controller/command', JointTrajectory, latch=True)
         
-#        rospy.loginfo("Waiting for trajectory filter service")
-#        try:
-#            rospy.wait_for_service("/trajectory_filter/filter_trajectory_with_constraints",1)
-#        except rospy.ROSException:
-#            rospy.logwarn("No trajectory server found!")
-#            self.filter_service = None
-#        else:
-#            self.filter_service = rospy.ServiceProxy("/trajectory_filter/filter_trajectory_with_constraints",
-#                                                 FilterJointTrajectoryWithConstraints)
-        
         # Some seemingly very important waits........
         rospy.loginfo("Waiting for joint trajectory actions")
         self.r_arm_client.wait_for_server()
