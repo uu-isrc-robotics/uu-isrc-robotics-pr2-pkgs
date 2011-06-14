@@ -35,13 +35,16 @@ import actionlib
 import math
 import exceptions
 
-from geometry_msgs.msg import Twist, Pose, PoseStamped, TwistStamped, PointStamped
-from sensor_msgs.msg import JointState
+#from geometry_msgs.msg import Twist, Pose, PoseStamped, TwistStamped, PointStamped
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from pr2_controllers_msgs.msg import (JointTrajectoryAction,
                                       Pr2GripperCommandAction,
                                       SingleJointPositionAction,
-                                      PointHeadAction)
+                                      PointHeadAction,
+                                      JointTrajectoryGoal,
+                                      Pr2GripperCommandGoal,
+                                      SingleJointPositionGoal,
+                                      PointHeadGoal)
 #from motion_planning_msgs.srv import (FilterJointTrajectoryWithConstraints,
 #                                      FilterJointTrajectoryWithConstraintsRequest, 
 #                                      FilterJointTrajectoryWithConstraintsResponse)
