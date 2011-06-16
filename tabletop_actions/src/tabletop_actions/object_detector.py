@@ -34,6 +34,7 @@ class ObjectDetector(object):
         
         self.last_wide_msg = None
         self.last_narrow_msg = None
+        self.last_detection_msg = None
         self.last_box_msg = None
         self.last_collision_processing_msg = None
 
@@ -57,10 +58,12 @@ class ObjectDetector(object):
         
     def detect_narrow(self):        
         self.last_narrow_msg = self.__detect(self.narrow_detector)
+        self.last_detection_msg = self.last_narrow_msg
         return self.last_narrow_msg
     
     def detect_wide(self):
-        self.last_wide_msg = self.__detect(self.wide_detector)        
+        self.last_wide_msg = self.__detect(self.wide_detector)
+        self.last_detection_msg = self.last_wide_msg        
         return self.last_wide_msg
     
     def find_biggest_cluster(self, clusters = None):
@@ -133,12 +136,15 @@ class ObjectDetector(object):
         if res_narrow is None:
             rospy.logwarn("No luck with narrow stereo, trying the wide one")
             res_wide = self.detect_wide()
-            if res_wide is not None:
-                self.call_collision_map_processing(res_wide)
-            return res_wide
-        else:
-            self.call_collision_map_processing(res_narrow)
-            return res_narrow
+#            if res_wide is not None:
+#                self.call_collision_map_processing(res_wide)
+#            return res_wide
+#        else:
+#            self.call_collision_map_processing(res_narrow)
+#            return res_narrow
+        if self.last_detection_msg is not None:
+            self.call_collision_map_processing(self.last_detection_msg)
+        return self.last_detection_msg
 
     
     def detect_bounding_box(self, cluster = None, use_random = False):        
