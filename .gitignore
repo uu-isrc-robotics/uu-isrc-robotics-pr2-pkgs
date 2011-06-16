@@ -22,3 +22,4 @@ uu-controllers/schunk_gui/baks/
 ROS_NOBUILD
 ignore/
 *.stack
+.idea/
