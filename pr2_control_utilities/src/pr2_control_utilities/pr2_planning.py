@@ -39,18 +39,25 @@ from motion_planning_msgs.msg import OrderedCollisionOperations, CollisionOperat
 from motion_planning_msgs.msg import AllowedContactSpecification
 from geometric_shapes_msgs.msg import Shape
 import tf
+from collision_environment_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
+from actionlib_msgs.msg import GoalStatus
 
 import pr2_control_utilities
 import math
 
 
 class PR2MoveArm(object):
-    def __init__(self, joint_mover):        
+    def __init__(self, joint_mover):
+        rospy.loginfo("Waiting for the move_arm services")                
         self.move_right_arm_client = SimpleActionClient("move_right_arm", MoveArmAction)
         self.move_right_arm_client.wait_for_server()
         
         self.move_left_arm_client = SimpleActionClient("move_left_arm", MoveArmAction)
         self.move_left_arm_client.wait_for_server()
+        
+        self.make_static_collision_map_client = actionlib.SimpleActionClient('make_static_collision_map', MakeStaticCollisionMapAction)
+        rospy.loginfo("waiting for make_static_collision_map action server")
+        self.make_static_collision_map_client.wait_for_server()
         
         tf_listener = tf.TransformListener()
         self.right_ik = pr2_control_utilities.IKUtilities("right", tf_listener=tf_listener)
@@ -388,6 +395,24 @@ class PR2MoveArm(object):
                           "l_gripper_l_finger_tip_link",
                           "l_gripper_r_finger_tip_link"]
         return msg
+    
+    def take_static_map(self):
+        rospy.loginfo("Taking a static collision map")
+        static_map_goal = MakeStaticCollisionMapGoal()
+        static_map_goal.cloud_source = "full_cloud_filtered"
+        static_map_goal.number_of_clouds = 2
+        self.make_static_collision_map_client.send_goal(static_map_goal)
+
+        if not self.make_static_collision_map_client.wait_for_result(rospy.Duration(30)):
+            rospy.loginfo("collision map was not formed in allowed time")
+            return 0
+
+        if self.make_static_collision_map_client.get_state() == GoalStatus.SUCCEEDED:
+            rospy.loginfo("static map successfully updated")
+            return 1
+        else:
+            rospy.loginfo("some other non-success state was reached for static collision map.  Proceed with caution.")
+            return 0
     
 if __name__ == "__main__":
     rospy.init_node('trytest', anonymous=True)

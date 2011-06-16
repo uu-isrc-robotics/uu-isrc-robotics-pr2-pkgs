@@ -21,6 +21,7 @@
   <depend package="tf"/>
   <depend package="move_arm_msgs"/>
   <depend package="interpolated_ik_motion_planner" />
+  <depend package="collision_environment_msgs" />
 
 </package>
 
