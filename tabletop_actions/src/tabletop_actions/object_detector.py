@@ -8,6 +8,7 @@ from tabletop_collision_map_processing.srv import TabletopCollisionMapProcessing
 
 import random
 from rospy.service import ServiceException
+from visualization_msgs.msg import Marker
 
 class ObjectDetector(object):
     def __init__(self):
@@ -31,6 +32,10 @@ class ObjectDetector(object):
         rospy.loginfo("Waiting for collision processing service to come up") 
         rospy.wait_for_service(collision_processing)
         self.collision_processing = rospy.ServiceProxy(collision_processing, TabletopCollisionMapProcessing)
+        
+        self.box_drawer = rospy.Publisher("box_drawer", 
+                                          Marker
+                                          )
         
         self.last_wide_msg = None
         self.last_narrow_msg = None
@@ -197,6 +202,25 @@ class ObjectDetector(object):
         frame = box_msg.pose.header.frame_id
         mover.point_head_to(position, frame)
         return True 
+
+    def draw_bounding_box(self, id, box_msg):
+        marker = Marker()
+        marker.header.stamp = rospy.Time.now()
+        marker.ns = "object_detector"
+        marker.type = Marker.CUBE
+        marker.action = marker.ADD
+        marker.id = id
+        marker.header.frame_id = box_msg.pose.header.frame_id
+        
+        marker.pose = box_msg.pose.pose
+        marker.scale.x = box_msg.box_dims.x
+        marker.scale.y = box_msg.box_dims.y
+        marker.scale.z = box_msg.box_dims.z
+        
+        marker.color.a = 0.5
+        marker.color.r = 1.0
+        
+        self.box_drawer.publish(marker)
 
     def search_for_object(self, mover, trials = 1, use_random=True, 
                           max_pan=0.4, min_pan=-0.4,
