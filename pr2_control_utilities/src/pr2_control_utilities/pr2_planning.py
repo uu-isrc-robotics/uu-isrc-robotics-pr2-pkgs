@@ -59,9 +59,11 @@ class PR2MoveArm(object):
         rospy.loginfo("waiting for make_static_collision_map action server")
         self.make_static_collision_map_client.wait_for_server()
         
-        tf_listener = tf.TransformListener()
-        self.right_ik = pr2_control_utilities.IKUtilities("right", tf_listener=tf_listener)
-        self.left_ik = pr2_control_utilities.IKUtilities("left", tf_listener=tf_listener)
+        self.tf_listener = tf.TransformListener()
+        self.right_ik = pr2_control_utilities.IKUtilities("right", 
+                                                          tf_listener=self.tf_listener)
+        self.left_ik = pr2_control_utilities.IKUtilities("left", 
+                                                         tf_listener=self.tf_listener)
         self.joint_mover = joint_mover
         
     def __move_arm(self, arm, position, orientation, frame_id,  waiting_time, 
@@ -155,7 +157,8 @@ class PR2MoveArm(object):
                                allowed_contacts)
         
     
-    def __move_arm_non_collision(self, arm, position, orientation, frame_id, ignore_errors = False):
+    def __move_arm_non_collision(self, arm, position, orientation, frame_id,
+                                 time_required):
         
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
@@ -171,38 +174,41 @@ class PR2MoveArm(object):
             rospy.logerr("Unknown arm: %s"%arm)
             return False
         
-        current_pose_stamped = ik.run_fk(self.joint_mover.robot_state.right_arm_positions,
-                                              link_name)
         end_pose = ik.lists_to_pose_stamped(position, 
                                                  orientation, 
                                                  frame_id, 
                                                  frame_id)
-        trajectory, error_codes = ik.check_cartesian_path(current_pose_stamped, 
-                                                               end_pose, 
-                                                               joint_angles, 
-                                                               collision_aware = 0,
-                                                               num_steps=10)
-       
-        trajectory = self.__normalize_trajectory(trajectory, joint_angles)       
-        if (not ignore_errors) and any( (e == 3 for e in error_codes) ):
-            rospy.logerr("IK returns error codes: %s"%str(error_codes))
+        
+        joints, _ = ik.run_ik(end_pose, joint_angles, link_name, 
+                                 collision_aware=0) 
+        if joints is not None:
+            old_time = self.joint_mover.time_to_reach
+            self.joint_mover.time_to_reach = time_required
+            self.joint_mover.set_arm_state(joints, mover_arm, wait=True)
+            self.joint_mover.time_to_reach = old_time
+            return True
+        else:
             return False
-        self.joint_mover.execute_trajectory(trajectory, mover_arm, True)
-        return True
     
-    def move_right_arm_non_collision(self, position, orientation, frame_id, ignore_errors = False):
+    def move_right_arm_non_collision(self, position, orientation, 
+                                     frame_id,
+                                     time_required = 1.0,
+                                     ):
         return self.__move_arm_non_collision("right_arm", 
                                              position, 
                                              orientation, 
-                                             frame_id, 
-                                             ignore_errors)        
+                                             frame_id,
+                                             time_required)        
 
-    def move_left_arm_non_collision(self, position, orientation, frame_id, ignore_errors = False):
+    def move_left_arm_non_collision(self, position, orientation, 
+                                     frame_id,
+                                     time_required = 1.0,
+                                     ):
         return self.__move_arm_non_collision("left_arm", 
-                                             position, 
+                                              position, 
                                              orientation, 
-                                             frame_id, 
-                                             ignore_errors)
+                                             frame_id,
+                                             time_required)
     
     def __create_trjectory_non_collision(self,
                                          arm,
