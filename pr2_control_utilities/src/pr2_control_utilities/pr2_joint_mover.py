@@ -172,7 +172,7 @@ class PR2JointMover(object):
         while not self.done() and not rospy.is_shutdown():
             rospy.sleep(0.01)   
 
-    def __create_spin_command(self, arm):
+    def __create_spin_command(self, arm, theta=math.pi):
         if arm == 'l':
             jnts = self.robot_state.left_arm_positions 
         if arm == 'r':
@@ -187,7 +187,7 @@ class PR2JointMover(object):
                                '%s_wrist_flex_joint' % arm[0],
                                '%s_wrist_roll_joint' % arm[0]]
         
-        jnts[-1] += math.pi    
+        jnts[-1] += theta
         command.points.append(JointTrajectoryPoint(
             positions=jnts,
             velocities = [0.0] * (len(command.joint_names)),
@@ -198,21 +198,27 @@ class PR2JointMover(object):
         goal.trajectory = command
         return goal
         
-    def spin_wrists(self, ntimes):
+    def spin_wrists(self, ntimes=1, whicharm="both", theta=math.pi):
         '''
         Rotates the joints ntimes * pi degrees.
-        @param ntimes:
+        @param ntimes: number of times to execute the spin
+        @param whichArm: 'r'=right arm, 'l'=left arm 
+        @param theta: Amount to spin the wrist in radians
         '''
         
         for _ in xrange(ntimes):
-            goal_r = self.__create_spin_command("r")
-            goal_l = self.__create_spin_command("l")
+            if (whicharm == "both") or (whicharm[0] == "r"):
+                goal_r = self.__create_spin_command("r", theta)
+                self.r_arm_client.send_goal(goal_r)
             
-            self.l_arm_client.send_goal(goal_l)
-            self.r_arm_client.send_goal(goal_r)
+            if (whicharm == "both") or (whicharm[0] == "l"):
+                goal_l = self.__create_spin_command("l",theta)
+                self.l_arm_client.send_goal(goal_l)
             
-            self.r_arm_client.wait_for_result()
-        
+            if (whicharm == "both") or (whicharm[0] == "r"):
+                self.r_arm_client.wait_for_result()
+            elif whicharm[0] == "l":
+                self.l_arm_client.wait_for_result()
 
     def set_arm_state(self, jvals, arm, wait = False, ):
         """ Sets goal for indicated arm (r_arm/l_arm) using provided joint values"""
