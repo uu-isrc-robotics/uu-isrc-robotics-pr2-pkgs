@@ -198,12 +198,12 @@ class ObjectDetector(object):
             return False
         position = (box_msg.pose.pose.position.x,
                     box_msg.pose.pose.position.y,
-                    box_msg.pose.pose.position.z - 0.5)
+                    box_msg.pose.pose.position.z)
         frame = box_msg.pose.header.frame_id
         mover.point_head_to(position, frame)
         return True 
 
-    def draw_bounding_box(self, id, box_msg):
+    def draw_bounding_box(self, id, box_msg, color = (1.0, 1.0, 0.0, 0.0)):
         marker = Marker()
         marker.header.stamp = rospy.Time.now()
         marker.ns = "object_detector"
@@ -217,8 +217,10 @@ class ObjectDetector(object):
         marker.scale.y = box_msg.box_dims.y
         marker.scale.z = box_msg.box_dims.z
         
-        marker.color.a = 0.5
-        marker.color.r = 1.0
+        marker.color.a = color[0]
+        marker.color.r = color[1]
+        marker.color.g = color[2]
+        marker.color.b = color[3]
         
         self.box_drawer.publish(marker)
 
