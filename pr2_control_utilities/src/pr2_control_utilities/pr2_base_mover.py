@@ -54,11 +54,11 @@ def sign_zero(x):
         return 0
 
 class PR2BaseMover(object):
-    def __init__(self, tf = None):
-        if tf is None:        
+    def __init__(self, listener = None):
+        if listener is None:        
             self.listener = tf.TransformListener()
         else:
-            self.listener = tf
+            self.listener = listener
         
         self.cmd_vel_pub = rospy.Publisher("/base_controller/command", Twist)
         
