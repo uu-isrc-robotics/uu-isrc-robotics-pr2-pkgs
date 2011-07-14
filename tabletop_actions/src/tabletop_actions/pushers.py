@@ -23,7 +23,8 @@ class Pusher(object):
         self.err_msg = ""
 
         
-    def push_object(self, box_msg, ignore_errors = False, normalize = True):
+    def push_object(self, box_msg, ignore_errors = False, normalize = True,
+                    max_vel = 0.2):
 
         self.err_msg = ""        
         if self.which_arm() == "right_arm":
@@ -98,7 +99,7 @@ class Pusher(object):
         if not trajectory_mover(traj_poses,
                          whole_angles,
                          frame,
-                         max_vel=0.4,
+                         max_vel=max_vel,
                          ignore_errors=ignore_errors,
                          normalize=normalize):
             rospy.logerr("Strangely something when wrong when actually pushing!")
