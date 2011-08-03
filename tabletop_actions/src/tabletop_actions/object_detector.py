@@ -10,6 +10,7 @@ import random
 from rospy.service import ServiceException
 from visualization_msgs.msg import Marker
 import math
+from tf import transformations
 
 class ObjectDetector(object):
     def __init__(self):
@@ -46,6 +47,19 @@ class ObjectDetector(object):
 
         rospy.loginfo("ObjectDetector is ready")
 
+    def __table_test(self, detection_msg):
+        table = detection_msg.detection.table
+        table_quat = (table.pose.pose.orientation.x,
+                      table.pose.pose.orientation.y,
+                      table.pose.pose.orientation.z,
+                      table.pose.pose.orientation.w)
+        table_angles = transformations.euler_from_quaternion(table_quat)
+        if (math.fabs(table_angles[0]) < 0.1 and
+            math.fabs(table_angles[1]) < 0.1):
+            return True
+        else:
+            rospy.logwarn("Table has wrong angles: %s",str(table_angles))
+            return False
     
     def __detect(self, detector):
         req = TabletopDetectionRequest()
@@ -59,6 +73,8 @@ class ObjectDetector(object):
         if reply.detection.result != reply.detection.SUCCESS:
             return None
         if len(reply.detection.clusters) == 0:
+            return None
+        if not self.__table_test(reply):
             return None
         return reply
         
@@ -133,8 +149,7 @@ class ObjectDetector(object):
         
         for i, box in enumerate(boxes):
             dist = math.sqrt(box.pose.pose.position.x**2 +
-                             box.pose.pose.position.y**2 +
-                             box.pose.pose.position.z**2)
+                             box.pose.pose.position.y**2)
             if dist < closest_dist:
                 closest_dist = dist
                 closest_index = i
@@ -212,7 +227,6 @@ class ObjectDetector(object):
     def point_head_at(self, mover, box_msg = None, 
                       cluster_choser = "find_random_cluster"):
         if box_msg is None:
-#            res = self.detect_wide()
             res = self.try_to_detect()
             if res is None:
                 rospy.logerr("No object found!")
