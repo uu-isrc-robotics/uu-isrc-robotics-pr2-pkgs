@@ -486,7 +486,7 @@ class PR2JointMover(object):
                     self.name = l.split(":")[1]
                     break
         except exceptions.Exception, e:
-            rospy.logerr(e.message)
+            #rospy.logerr(e.message)
             return False
 #
         if type(bfile) is str:

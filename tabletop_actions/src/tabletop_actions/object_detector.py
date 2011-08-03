@@ -9,6 +9,7 @@ from tabletop_collision_map_processing.srv import TabletopCollisionMapProcessing
 import random
 from rospy.service import ServiceException
 from visualization_msgs.msg import Marker
+import math
 
 class ObjectDetector(object):
     def __init__(self):
@@ -71,12 +72,9 @@ class ObjectDetector(object):
         self.last_detection_msg = self.last_wide_msg        
         return self.last_wide_msg
     
-    def find_biggest_cluster(self, clusters = None):
+    def find_biggest_cluster(self, clusters):
         if clusters is None:
-            res = self.detect_narrow()
-            if res is None:
-                return None
-            clusters = res.detection.clusters
+            return None
          
         if len(clusters) == 0:
             rospy.logerr("No object found!")
@@ -93,23 +91,58 @@ class ObjectDetector(object):
         rospy.loginfo("Using object %d with %d points"%(index, len(object_cluster.points))) 
         return object_cluster
     
-    def find_random_cluster(self, clusters = None):
+    def find_random_cluster(self, clusters):
         if clusters is None:
-            res = self.detect_narrow()
-            if res is None:
-                return None
-            clusters = res.detection.clusters
+            return None
          
         if len(clusters) == 0:
             rospy.logerr("No object found!")
             return None
         
-        #finding the biggest cluster
-        
+        #using a random cluster        
         index = random.randint(0, len(clusters)-1)
         object_cluster = clusters[index] 
         rospy.loginfo("Using object %d with %d points"%(index, len(object_cluster.points))) 
         return object_cluster
+    
+    def find_closest_cluster(self, clusters):
+        '''
+        Searches for the closest cluster among clusters. It uses 
+        detect_bounding_box to find the cluster position
+        @param clusters: a list of PointCloud among wich to find the closest 
+        cluster 
+        '''
+        if clusters is None:
+            return None
+         
+        if len(clusters) == 0:
+            rospy.logerr("No object found!")
+            return None
+        
+        boxes = []
+        for cluster in clusters:
+            box_msg = self.detect_bounding_box(cluster)
+            if box_msg is not None:
+                boxes.append(box_msg)
+        
+        if len(boxes) == 0:
+            return None
+        
+        closest_index = 0
+        closest_dist = 10000
+        
+        for i, box in enumerate(boxes):
+            dist = math.sqrt(box.pose.pose.position.x**2 +
+                             box.pose.pose.position.y**2 +
+                             box.pose.pose.position.z**2)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_index = i
+        
+        rospy.loginfo("Using object %d with %f distance"%
+                      (closest_index, closest_dist))
+        return clusters[closest_index]
+        
     
     def call_collision_map_processing(self, detection_result):
         
@@ -140,23 +173,20 @@ class ObjectDetector(object):
         res_narrow = self.detect_narrow()
         if res_narrow is None:
             rospy.logwarn("No luck with narrow stereo, trying the wide one")
-            res_wide = self.detect_wide()
-#            if res_wide is not None:
-#                self.call_collision_map_processing(res_wide)
-#            return res_wide
-#        else:
-#            self.call_collision_map_processing(res_narrow)
-#            return res_narrow
+            self.detect_wide()
         if self.last_detection_msg is not None:
             self.call_collision_map_processing(self.last_detection_msg)
         return self.last_detection_msg
 
     
-    def detect_bounding_box(self, cluster = None, use_random = False):        
-        if use_random:
+    def detect_bounding_box(self, cluster = None, 
+                            cluster_choser = "find_random_cluster"):
+        try:
+            finder = self.__getattribute__(cluster_choser)
+        except AttributeError:
+            rospy.logwarn("Cluster choser %s does not exist, using the random one" %
+                          cluster_choser)
             finder = self.find_random_cluster
-        else:
-            finder = self.find_biggest_cluster 
         
         if cluster is None:            
             detection_result = self.try_to_detect()
@@ -179,7 +209,8 @@ class ObjectDetector(object):
             rospy.logwarn("An error was reported when trying tabletop")
             return self.last_box_msg
     
-    def point_head_at(self, mover, box_msg = None, use_random = False):
+    def point_head_at(self, mover, box_msg = None, 
+                      cluster_choser = "find_random_cluster"):
         if box_msg is None:
 #            res = self.detect_wide()
             res = self.try_to_detect()
@@ -188,10 +219,14 @@ class ObjectDetector(object):
                 return False
             clusters = res.detection.clusters 
             
-            if use_random:
-                object_cluster = self.find_random_cluster(clusters)
-            else:
-                object_cluster = self.find_biggest_cluster(clusters) 
+            try:
+                finder = self.__getattribute__(cluster_choser)
+            except AttributeError:
+                rospy.logwarn("Cluster choser %s does not exist, using the random one" %
+                              cluster_choser)
+                finder = self.find_random_cluster
+
+            object_cluster = finder(clusters) 
             box_msg = self.detect_bounding_box(cluster = object_cluster)
         
         if box_msg is None:
@@ -224,12 +259,13 @@ class ObjectDetector(object):
         
         self.box_drawer.publish(marker)
 
-    def search_for_object(self, mover, trials = 1, use_random=True, 
+    def search_for_object(self, mover, trials = 1, 
+                          cluster_choser="find_random_cluster", 
                           max_pan=0.4, min_pan=-0.4,
                           max_tilt = 1.1, min_tilt = 0.8):    
 
         #first try without moving        
-        if self.point_head_at(mover,use_random = use_random):
+        if self.point_head_at(mover,cluster_choser = cluster_choser):
             return True
         trials -= 1
         while trials > 0:
@@ -238,8 +274,9 @@ class ObjectDetector(object):
             mover.set_head_state((pan, tilt))
             rospy.sleep(0.5)
             
-            if self.point_head_at(mover,use_random = use_random):
+            if self.point_head_at(mover,cluster_choser = cluster_choser):
                 return True
             trials -= 1
+        return False
             
             
