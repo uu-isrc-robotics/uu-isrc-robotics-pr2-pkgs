@@ -39,7 +39,7 @@ class Grabber(object):
         @param lift_desired_distance: the desired lift distance
         @param lift_min_distance: the min distance that must be considered 
         feasible before the grasp is even attempted
-        @param: how long to wait for the action to be successful 
+        @param wait: how long to wait for the action to be successful 
         '''
         
         pickup_goal = PickupGoal()
