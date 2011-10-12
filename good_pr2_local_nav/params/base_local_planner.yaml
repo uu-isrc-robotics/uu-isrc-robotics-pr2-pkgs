@@ -1,0 +1,33 @@
+acc_lim_theta: 3.2
+acc_lim_x: 2.5
+amax_vel_theta: 1.0
+max_vel_x: 0.55
+min_in_place_vel_theta: 0.4
+min_vel_theta: 0.0
+min_vel_x: 0.10000000000000001
+occ_lim_y: 2.5
+
+dwa: true
+escape_reset_dist: 0.10000000000000001
+escape_reset_theta: 1.57079632679
+escape_vel: -0.10000000000000001
+gdist_scale: 0.80000000000000004
+heading_lookahead: 0.32500000000000001
+heading_scoring: false
+heading_scoring_timestep: 0.10000000000000001
+holonomic_robot: true
+ccdist_scale: 0.01
+oscillation_reset_dist: 0.050000000000000003
+pdist_scale: 0.59999999999999998
+restore_defaults: false
+
+#simulator
+angular_sim_granularity: 0.025
+sim_granularity: 0.025000000000000001
+sim_time: 1.7
+simple_attractor: false
+vtheta_samples: 20
+vx_samples: 20
+y_vels: '-0.3-0.10.1-0.3'
+
+prune_plan: true

@@ -1,0 +1,20 @@
+<package>
+  <description brief="Parameters for local navigation">
+
+     A set of parameters that work fine with the PR2 at University of Ulster. Based on
+     code from Travis Deylee.
+
+  </description>
+  <author>Lorenzo Riano</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/good_pr2_local_nav</url>
+  <depend package="pr2_navigation_perception"/>
+  <depend package="pr2_navigation_teleop"/>
+  <depend package="pr2_machine"/>
+  <depend package="move_base"/>
+  <depend package="sbpl"/>
+
+</package>
+
+
