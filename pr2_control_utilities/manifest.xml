@@ -13,15 +13,15 @@
   <depend package="rospy"/>
   <depend package="pr2_controllers_msgs"/>
   <depend package="geometry_msgs"/>
-  <depend package="motion_planning_msgs"/>
+  <depend package="arm_navigation_msgs"/>
   <depend package="sensor_msgs"/>
   <depend package="actionlib"/>
   <depend package="actionlib_msgs"/>
   <depend package="kinematics_msgs"/>
   <depend package="tf"/>
-  <depend package="move_arm_msgs"/>
+<!--   <depend package="move_arm_msgs"/> -->
   <depend package="interpolated_ik_motion_planner" />
-  <depend package="collision_environment_msgs" />
+<!--   <depend package="collision_environment_msgs" /> -->
 
 </package>
 

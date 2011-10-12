@@ -32,14 +32,14 @@ import roslib
 roslib.load_manifest("pr2_control_utilities")
 import rospy
 import actionlib
-from move_arm_msgs.msg import MoveArmAction, MoveArmGoal
+from arm_navigation_msgs.msg import MoveArmAction, MoveArmGoal
 from actionlib import SimpleActionClient
-from motion_planning_msgs.msg import PositionConstraint, OrientationConstraint
-from motion_planning_msgs.msg import OrderedCollisionOperations, CollisionOperation
-from motion_planning_msgs.msg import AllowedContactSpecification
-from geometric_shapes_msgs.msg import Shape
+from arm_navigation_msgs.msg import PositionConstraint, OrientationConstraint
+from arm_navigation_msgs.msg import OrderedCollisionOperations, CollisionOperation
+from arm_navigation_msgs.msg import AllowedContactSpecification
+from arm_navigation_msgs.msg import Shape
 import tf
-from collision_environment_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
+from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
 from actionlib_msgs.msg import GoalStatus
 
 import pr2_control_utilities
