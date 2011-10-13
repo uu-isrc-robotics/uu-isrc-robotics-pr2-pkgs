@@ -48,8 +48,6 @@ class Grabber(object):
         pickup_goal.collision_support_surface_name = collision_map_processing_msg.collision_support_surface_name
         
         pickup_goal.arm_name = which_arm
-        pickup_goal.desired_approach_distance = desired_approach_distance
-        pickup_goal.min_approach_distance = min_approach_distance
         
         pickup_goal.lift.direction.header.frame_id = "base_link"
         pickup_goal.lift.direction.vector.x = 0

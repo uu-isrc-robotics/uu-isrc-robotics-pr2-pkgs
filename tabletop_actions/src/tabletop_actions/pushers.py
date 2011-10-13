@@ -1,8 +1,8 @@
 import rospy
 from visualization_msgs.msg import Marker
-from mapping_msgs.msg import CollisionObject
+from arm_navigation_msgs.msg import CollisionObject
 from geometry_msgs.msg import Point
-from geometric_shapes_msgs.msg import Shape
+from arm_navigation_msgs.msg import Shape
 from tf import transformations
 
 import pr2_control_utilities
@@ -26,7 +26,9 @@ class Pusher(object):
     def push_object(self, box_msg, ignore_errors = False, normalize = True,
                     max_vel = 0.2):
 
-        self.err_msg = ""        
+        
+        self.planner.update_planning_scene()
+        self.err_msg = ""
         if self.which_arm() == "right_arm":
             move_arm = self.planner.move_right_arm
             pre_push_joints = self.robot_state.right_arm_positions[:]

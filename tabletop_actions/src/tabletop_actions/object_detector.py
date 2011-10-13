@@ -171,9 +171,6 @@ class ObjectDetector(object):
     #    ask for the exising map and collision models to be reset
         processing_call.reset_attached_models = True
         processing_call.reset_collision_models = True
-        processing_call.reset_static_map = True
-    #    after the new models are added to the environment
-        processing_call.take_static_collision_map = True
         processing_call.desired_frame = "base_link"
         
         try:

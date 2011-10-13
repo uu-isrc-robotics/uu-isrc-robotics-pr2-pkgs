@@ -38,6 +38,7 @@ from arm_navigation_msgs.msg import PositionConstraint, OrientationConstraint
 from arm_navigation_msgs.msg import OrderedCollisionOperations, CollisionOperation
 from arm_navigation_msgs.msg import AllowedContactSpecification
 from arm_navigation_msgs.msg import Shape
+from arm_navigation_msgs.srv import SetPlanningSceneDiff
 import tf
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
 from actionlib_msgs.msg import GoalStatus
@@ -48,16 +49,22 @@ import math
 
 class PR2MoveArm(object):
     def __init__(self, joint_mover):
-        rospy.loginfo("Waiting for the move_arm services")                
+        rospy.loginfo("Waiting for the move_arm actions")                
         self.move_right_arm_client = SimpleActionClient("move_right_arm", MoveArmAction)
         self.move_right_arm_client.wait_for_server()
         
         self.move_left_arm_client = SimpleActionClient("move_left_arm", MoveArmAction)
         self.move_left_arm_client.wait_for_server()
         
-        self.make_static_collision_map_client = actionlib.SimpleActionClient('make_static_collision_map', MakeStaticCollisionMapAction)
-        rospy.loginfo("waiting for make_static_collision_map action server")
+        rospy.loginfo("waiting for action make_static_collision_map action server")
+        self.make_static_collision_map_client = actionlib.SimpleActionClient('make_static_collision_map', 
+                                                                             MakeStaticCollisionMapAction)
         self.make_static_collision_map_client.wait_for_server()
+        
+        rospy.loginfo("waiting for service set_planning_scene_diff")
+        self.planning_scene_client = rospy.ServiceProxy("/environment_server/set_planning_scene_diff",
+                                                        SetPlanningSceneDiff)
+        self.planning_scene_client.wait_for_service()
         
         self.tf_listener = tf.TransformListener()
         self.right_ik = pr2_control_utilities.IKUtilities("right", 
@@ -65,6 +72,8 @@ class PR2MoveArm(object):
         self.left_ik = pr2_control_utilities.IKUtilities("left", 
                                                          tf_listener=self.tf_listener)
         self.joint_mover = joint_mover
+        
+        rospy.loginfo("%s is ready", self.__class__.__name__)
         
     def __move_arm(self, arm, position, orientation, frame_id,  waiting_time, 
                    ordered_collision_operations = None,
@@ -123,10 +132,10 @@ class PR2MoveArm(object):
         
         if ordered_collision_operations is not None:
             rospy.loginfo("Adding ordered collisions")
-            goal.motion_plan_request.ordered_collision_operations = ordered_collision_operations
+            goal.operations = ordered_collision_operations
         if allowed_contacts is not None:
             rospy.loginfo("Adding allowed_contacts")
-            goal.motion_plan_request.allowed_contacts = allowed_contacts
+            goal.planning_scene_diff.allowed_contacts = allowed_contacts
         goal.disable_collision_monitoring = False
         
         state = client.send_goal_and_wait(goal, rospy.Duration(waiting_time))
@@ -134,6 +143,9 @@ class PR2MoveArm(object):
             return True
         else:
             return False
+    
+    def update_planning_scene(self):
+        self.planning_scene_client.call()
     
     def move_right_arm(self, position, orientation, frame_id,  waiting_time, 
                        ordered_collision_operations = None,
