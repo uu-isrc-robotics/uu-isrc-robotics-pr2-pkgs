@@ -31,7 +31,6 @@
 import roslib
 roslib.load_manifest("pr2_control_utilities")
 import rospy
-import actionlib
 import math
 import exceptions
 
@@ -742,16 +741,19 @@ class PR2JointMover(object):
 class PosesSet(object):
     '''
     This class is used to execute a set of PR2JointMover in sequence. The variable
-    robot_state is a list of movers that will be executed in order.
+    state is either a RobotState or None.
     '''
-    def __init__(self, state):
+    def __init__(self, state=None):
         self.movers = []
-        self.robot_state = state
+        if state is None:
+            self.robot_state = RobotState()
+        else:
+            self.robot_state = state
         
     def parse_bookmark_file(self, bfile):
         '''
         Parse a file with a sequence of joints previously saved by a @PR2JointMover. 
-        @param bfile: either a 
+        @param bfile: either an open file or a path
         '''
         if type(bfile) is str:
             f = open(bfile,'r')
@@ -775,15 +777,6 @@ class PosesSet(object):
             mover.execute_and_wait()
         
 
-def test_move_torso():
-    state = RobotState()
-    mover = PR2JointMover(state)
-    
-    mover.set_torso_state(1.0,wait=True)
-    
-    mover.store_targets()
-#    mover.write_targets("/home/pezzotto/tmp.stack")
-    
 def test_open_file():
     state = RobotState()
     mover = PR2JointMover(state)
@@ -801,36 +794,6 @@ def test_save_file():
     mover.store_targets()
             
     
-def prepare_coffee():
-    state = RobotState()
-    mover = PosesSet(state)
-    
-    mover.parse_bookmark_file("/home/pezzotto/PrepareCofee/get_the_powder.stack")
-    mover.parse_bookmark_file("/home/pezzotto/PrepareCofee/pour_kettle.stack")
-    mover.parse_bookmark_file("/home/pezzotto/PrepareCofee/stir.stack")
-    mover.exec_all()
-    
-    dance1_mover = PR2JointMover(state)
-    DIR = roslib.packages.get_pkg_dir("rubiks_graph", required=True) + "/RCube/"    
-    filename = os.path.join(DIR, "dance1"+".pos")
-    dance1_mover.parse_bookmark_file(filename)
-    dance1_mover.time_to_reach = 3
-    
-    dance2_mover = PR2JointMover(state)
-    filename = os.path.join(DIR, "dance2"+".pos")
-    dance2_mover.parse_bookmark_file(filename)
-    dance2_mover.time_to_reach = 3
-    
-    
-    dance1_mover.execute_and_wait()
-    dance2_mover.execute_and_wait()
-    dance2_mover.spin_wrists(10)
-
-def test_joint_limits():
-    state = RobotState()
-    state.read_joint_limits()
-    rospy.loginfo("Limits: %s" %str(state.joint_limits))
-
 def test_singleton():
     
     state1 = RobotState()
@@ -841,14 +804,19 @@ def test_singleton():
     rospy.loginfo("Equal? %s"%str(state1 == state2))
 
 if __name__ == "__main__":
-    import os
-    
-    rospy.init_node('trytest', anonymous=True)
-    test_singleton()
-#    test_move_torso()
-#    test_open_file()
+    import sys
 
-#    test_joint_limits()
-    
+    rospy.init_node('trytest', anonymous=True)
+    if len(sys.argv) < 2:
+        rospy.logerr("please specify the file to open")
+        rospy.signal_shutdown()
+        sys.exit()
+   
+    poses = PosesSet()
+    with open(sys.argv[1]) as f:
+        poses.parse_bookmark_file(f)
+        poses.exec_all()
+
+
     rospy.loginfo("Done")
     
