@@ -5,13 +5,13 @@ The robot aligns with the object and move towards the edge of the table,
 until it stops.
 """
 
-import roslib; roslib.load_manifest('simple_approach_table')
+import roslib; roslib.load_manifest('learn_actions')
 import smach
 import rospy
 import pr2_control_utilities
 import tabletop_actions.object_detector as object_detector
 import tabletop_actions.pushers as pushers
-from simple_approach_table.msg import ObjectDiscovery
+from learn_actions.msg import ObjectDiscovery
 
 
 smach.set_loggers(rospy.loginfo,
