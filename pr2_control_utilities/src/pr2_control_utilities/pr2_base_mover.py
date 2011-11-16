@@ -32,13 +32,15 @@ import roslib
 roslib.load_manifest("pr2_control_utilities")
 
 import rospy
+import actionlib
 from geometry_msgs.msg import Twist
-from geometry_msgs.msg import PoseStamped, PointStamped
+from nav_msgs.srv import GetPlan 
+from move_base_msgs.msg import MoveBaseAction,  MoveBaseGoal
+from sensor_msgs.msg import LaserScan
 
 import tf
 import math
-import pr2_control_utilities
-from sensor_msgs.msg import LaserScan
+import utils
 
 def sign(x):
     if x>=0:
@@ -55,50 +57,79 @@ def sign_zero(x):
         return 0
 
 class PR2BaseMover(object):
-    def __init__(self, listener = None):
+    def __init__(self, listener = None,
+                 use_controller = True,
+                 use_move_base = False,
+                 use_safety_dist = True
+                 ):
+
+        self.use_controller = use_controller
+        self.use_move_base = use_move_base
+        self.use_safety_dist = use_safety_dist
+
+        base_controller_name = "/base_controller/command"
+        make_plan_service = "/move_base_local_node/make_plan"
+        move_base_action = "/move_base_local"
+
         if listener is None:        
             self.listener = tf.TransformListener()
         else:
             self.listener = listener
         
-        self.cmd_vel_pub = rospy.Publisher("/base_controller/command", Twist)
+        if use_controller:
+            self.cmd_vel_pub = rospy.Publisher(base_controller_name, Twist)
         
         self.max_vel = 0.25
         self.min_vel = 0.0
         self.min_rot = 0.0
         self.max_rot = math.pi/4
+       
+        if use_move_base:
+            rospy.loginfo("PR2BaseMover waiting for service %s", make_plan_service)
+            rospy.wait_for_service(make_plan_service)
+            self.make_plan = rospy.ServiceProxy(make_plan_service, GetPlan)
+
+            rospy.loginfo("Waiting for the action %s", move_base_action)
+            self.move_action = actionlib.SimpleActionClient(move_base_action, MoveBaseAction)
+            self.move_action.wait_for_server()
         
-        self.__base_laser = LaserScan()
-        self.__tilt_laser = LaserScan()
-        rospy.Subscriber("base_scan", LaserScan, self.__base_laser_cbk)
-        rospy.Subscriber("tilt_scan", LaserScan, self.__tilt_laser_cbk)
-        
+        if use_safety_dist:
+            rospy.loginfo("Waiting fo the laser services")
+            self.__base_laser = LaserScan()
+            self.__tilt_laser = LaserScan()
+            rospy.Subscriber("base_scan", LaserScan, self.__base_laser_cbk)
+            rospy.Subscriber("tilt_scan", LaserScan, self.__tilt_laser_cbk)
+            self.check_dist = True
+            
+        rospy.loginfo("PR2BaseMover ready")
+
+
     def __base_laser_cbk(self, laser_data):
         self.__base_laser = laser_data
     
     def __tilt_laser_cbk(self, laser_data):
-        self.__tilt_laser = laser_data   
-    
+        self.__tilt_laser = laser_data 
+
     def drive_to_displacement(self, pos,
                               inhibit_x = False,
                               inhibit_y = False,
                               inhibit_theta = False,
-                              safety_dist = 0.3):
+                              safety_dist = 0.3,
+                              ):
         '''
         Drive to the relative pos (diplacement)
         @param pos: tuple: x,y,theta        
         '''
         
-        desired_pos = self.convert_point((pos[0],pos[1],0),
-                                            "/base_link", 
-                                            "odom_combined")
+        desired_pos = utils.convert_point(self.listener,
+                                          (pos[0],pos[1],0),
+                                          "/base_link", 
+                                          "odom_combined")
         _ , rot = self.current_position()        
         desired_rot = rot[2] + pos[2]
         
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
-            if self.get_closest_laser_reading() <= safety_dist:
-                break
             (curr_trans, curr_rot) = self.current_position()
             if not inhibit_x:
                 dx = desired_pos[0] - curr_trans[0]
@@ -112,6 +143,12 @@ class PR2BaseMover(object):
                 dtheta = desired_rot - curr_rot[2]
             else:
                 dtheta = 0
+
+            if self.get_closest_laser_reading() <= safety_dist:
+                rospy.logwarn(""""Obstacle detected before movement could be
+                              completed. The distance left was %s""", (dx,dy,dtheta))
+                return False
+
 
             #the velocity vector has to be rotated in the base_frame reference            
             vx = dx * math.cos(-curr_rot[2]) - dy * math.sin(-curr_rot[2])
@@ -147,114 +184,79 @@ class PR2BaseMover(object):
             
             self.cmd_vel_pub.publish(base_cmd)
             rate.sleep()
+        return True
 
     def get_closest_laser_reading(self):
         '''
         Returns the closest reading between the tilt laser and the base
-        laser,
+        laser.
+
+        It returns a big number if self_safety_dist is false or no lasers
+        have been received yet
         '''
+        if not self.use_safety_dist:
+            return 1e10
+
         try:
-            min_base_range = min( r for r in self.__base_laser.ranges 
-                                  if r > self.__base_laser.range_min)
-            min_tilt_range = min( r for r in self.__tilt_laser.ranges 
-                                  if r > self.__tilt_laser.range_min)
-            
+            min_base_range = min( r for r in self.__base_laser.ranges
+                                 if r > self.__base_laser.range_min)
+            min_tilt_range = min( r for r in self.__tilt_laser.ranges
+                                 if r > self.__tilt_laser.range_min)
+
             return min (min_base_range, min_tilt_range)
         except ValueError:
-            return 10.0
-    
-    def move_until_obstacle_close(self, vx=0, vy=0, vtheta=0, dist=0.2):
-        '''
-        Move the base at the specified velocities until the closest laser is 
-        equal or less than dist  
-        @param vx: forward velocity
-        @param vy: lateral velocity
-        @param vtheta: angular velocity
-        @param dist: maximum distance from an obstacle before stopping
-        '''
-        curr_min = self.get_closest_laser_reading()
-        rate = rospy.Rate(10)
-        rospy.loginfo("Min is: %f", curr_min)
-        while curr_min > dist and not rospy.is_shutdown():
-            base_cmd = Twist()
-            base_cmd.linear.x = vx
-            base_cmd.linear.y = vy
-            base_cmd.angular.z = vtheta
-            self.cmd_vel_pub.publish(base_cmd)
-            rate.sleep()
-            curr_min = self.get_closest_laser_reading()
-            rospy.loginfo("Min is: %f", curr_min)
-            
-            
-                           
+            return 1e10        
+
     def current_position(self, frame="/odom_combined"):
-        
-        return self.convert_position((0,0,0), 
-                                       (0,0,0), 
-                                       "/base_link", 
-                                       frame)
-        
-    def convert_position(self, pos, rot, from_frame, to_frame):
-        self.listener.waitForTransform(to_frame, from_frame,
-                                        rospy.Time(0), rospy.Duration(1))
-
-        zeropose = PoseStamped()
-        zeropose.header.frame_id = from_frame
-        zeropose.pose.position.x = pos[0]
-        zeropose.pose.position.y = pos[1]
-        zeropose.pose.position.z = pos[2]
-        quaternion = tf.transformations.quaternion_from_euler(rot[0], rot[1], rot[2], axes="rxyz")
-        zeropose.pose.orientation.x = quaternion[0]
-        zeropose.pose.orientation.y = quaternion[1]
-        zeropose.pose.orientation.z = quaternion[2]
-        zeropose.pose.orientation.w = quaternion[3]
-        
-#        zeropose.header.stamp = rospy.Time.now()
-        newpose = self.listener.transformPose(to_frame, zeropose)
-        trans = (newpose.pose.position.x,
-                 newpose.pose.position.y,
-                 newpose.pose.position.z)
-        quaternion = (newpose.pose.orientation.x,
-                      newpose.pose.orientation.y,
-                      newpose.pose.orientation.z,
-                      newpose.pose.orientation.w)
-        rot = tf.transformations.euler_from_quaternion(quaternion,axes="rxyz")
-        return trans,rot
-        
-    def convert_point(self, pos, from_frame, to_frame):
-        self.listener.waitForTransform(to_frame, from_frame,
-                                        rospy.Time(0), rospy.Duration(1))
-
-        zeropose = PointStamped()
-        zeropose.header.frame_id = from_frame
-        zeropose.point.x = pos[0]
-        zeropose.point.y = pos[1]
-        zeropose.point.z = pos[2]
-        
-        newpose = self.listener.transformPoint(to_frame, zeropose)
-        return newpose.point.x, newpose.point.y, newpose.point.z
-        
-
-def test_displacement():
-    mover = PR2BaseMover()
-    mover.drive_to_displacement((0.0, +0.0, -math.pi/2))
+        return utils.convert_position(self.listener, 
+                                      (0,0,0), 
+                                      (0,0,0), 
+                                      "/base_link", 
+                                      frame)
     
-def test_move_until_obstacle():
-    mover = PR2BaseMover()
-    mover.move_until_obstacle_close(vx=0.1, dist=0.)
-    return
+    def current_pose_stamped(self, frame="/odom_combined"):
+        return utils.convert_to_posestamped(self.listener,
+                                           (0,0,0), 
+                                           (0,0,0), 
+                                           "/base_link", 
+                                           frame)
+        
+    def test_reachable(self, newpos, frame="/odom_combined"):
+        """
+        Check if it is possible to move the robot from its current position to newpos.
 
-def print_the_min():
-    mover = PR2BaseMover()
-    rate = rospy.Rate(10)
-    while not rospy.is_shutdown():
-        rospy.loginfo("Range: %f", mover.get_closest_laser_reading())
-        rate.sleep()    
-    
-    
-    
-if __name__ == "__main__":
-    rospy.init_node("try_move", anonymous=True)
-#    test_move_until_obstacle()
-    print_the_min()
-    rospy.loginfo("Done")       
+        @param newpos: A PoseStamped
+        @param frame: Transform newpos into this frame. It has to be allowed by move_base
+
+        """
+        if not self.use_move_base:
+            rospy.logerr("Trying to call a move_base service without \
+            initializing it")
+            return False
+
+        start = self.current_pose_stamped(frame)
+        self.listener.waitForTransform(frame, newpos.header.frame_id,
+                                       rospy.Time(0), rospy.Duration((1.0)))
+        goal = self.listener.transformPose(frame, newpos)
+        tolerance = 0.0
+        
+        res = self.make_plan(start = start, goal = goal, tolerance = tolerance)
+        return len(res.plan.poses) > 0
+        
+    def move_to_pose(self, pos, frame="/odom_combined"):
+        """
+        Move the robot to pos, using the move_base actions.
+
+        @param pos: A PoseStamped
+        @param frame: Check that the frame is allowed by move_base
+        """
+        if not self.use_move_base:
+            rospy.logerr("Trying to call a move_base service without \
+            initializing it")
+        self.listener.waitForTransform(frame, pos.header.frame_id,
+                                       rospy.Time(0), rospy.Duration((1.0)))
+        target = self.listener.transformPose(frame, pos)
+        goal= MoveBaseGoal()
+        goal.target_pose = target
+        self.move_action.send_goal(goal)
+        return self.move_action.wait_for_result()
