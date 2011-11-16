@@ -22,8 +22,167 @@ class Pusher(object):
         self.mover = pr2_control_utilities.PR2JointMover(robot_state)
         self.err_msg = ""
 
+    def test_push(self, box_msg, ignore_errors=False):
+        """
+        Tests if the object specified in box_msg is pushable.
+        Additionally draws the pushing trajectory by publishing markers.
+
+        Parameters:
+        box_msg: A FindClusterBoundingBox service response message. 
+        ignore_errors: wether or not to ignore single errors in the IK
+                    calculation. Sometimes single points in the trajectory can
+                    be ignored, but doing so might not guarantee that the robot
+                    will follow the correct trajectory.
         
-    def push_object(self, box_msg, ignore_errors = False, normalize = True,
+        Return:
+        (traj_poses, traj_angles): two lists with the trajectory poses and
+                angles which can be provided to perform_push. Returns None
+                if no trajectory was found.
+        """
+        self.planner.update_planning_scene()
+        self.err_msg = ""
+        if self.which_arm() == "right_arm":
+            trajectory_creator = self.planner.create_right_arm_trjectory_non_collision
+        elif self.which_arm() == "left_arm":
+            trajectory_creator = self.planner.create_left_arm_trjectory_non_collision
+        else:
+
+            rospy.logerr("Non existing arm being used!")
+            return None
+        
+        frame = box_msg.pose.header.frame_id
+        
+        traj_poses = self.get_pushing_poses(box_msg)
+        traj_angles = self.get_pushing_angles(box_msg)
+        self.__draw_poses(traj_poses, frame)
+        
+        
+        rospy.loginfo("Testing is pushing trajectory is feasible")
+        traj_angles = [traj_angles] * len(traj_poses)
+        res = trajectory_creator(traj_poses,
+                                 traj_angles,
+                                 frame,
+                                 max_vel=0.4,
+                                 ignore_errors=ignore_errors,
+                                 normalize=False)
+        if res:
+            rospy.loginfo("Pushing trajectory is ok")
+            return (traj_poses, traj_angles)
+        else:
+            self.err_msg = "IK Error"
+            rospy.logerr("The trajectory is not feasible")
+            return None
+
+    def perform_push(self, box_msg, traj_poses, traj_angles, 
+                    max_vel = 0.2, ignore_errors = False,
+                    normalize = True):
+        """
+        Pushes an object represented by a cluster bounding box. The trajectory
+        has to be calculated beforhand by test_pusher. The arm will move back
+        to the initial position after pushing.
+        
+        Parameters:
+        box_msg: a FindClusterBoundingBox service response message. 
+        traj_poses: the trajectory poses found by test_push.
+        traj_angles: the trajectory angles found by test_push.
+        max_vel: the maximum velocity to apply to the joints.
+        ignore_errors: wether or not to ignore single errors in the IK
+                    calculation. Sometimes single points in the trajectory can
+                    be ignored, but doing so might not guarantee that the robot
+                    will follow the correct trajectory.
+        normalize: wether or not to normalize the trajectory so that the joints
+                    will move less while following the same trajectory. It could
+                    be computationally expensive.
+
+        Returns: True on success, False otherwise.
+        """
+        
+        frame = box_msg.pose.header.frame_id
+        initial_head_position = self.robot_state.head_positions[:]
+        if self.which_arm() == "right_arm":
+            move_arm = self.planner.move_right_arm
+            pre_push_joints = self.robot_state.right_arm_positions[:]
+            trajectory_mover = self.planner.move_right_arm_trajectory_non_collision
+        elif self.which_arm() == "left_arm":
+            move_arm = self.planner.move_left_arm
+            pre_push_joints = self.robot_state.left_arm_positions[:]
+            trajectory_mover = self.planner.move_left_arm_trajectory_non_collision
+        else:
+            return self.__getout("Non existing arm being used!")
+
+        #creating the allow_contacts_specification.. useless right now!
+        object_id = "pushable_object"
+        collision_object_msg = self.__build_object_from_box(box_msg, object_id)
+        self.collision_objects_pub.publish(collision_object_msg)  
+        
+        collision_operation = self.planner.build_collision_operations(self.which_arm(), 
+                                                                 object_id)
+        dimensions = [box_msg.box_dims.x,
+                      box_msg.box_dims.y,
+                      box_msg.box_dims.z]    
+        allowed_contact_specification = self.planner.build_allowed_contact_specification(box_msg.pose,
+                                                                                         dimensions)
+        allowed_contact_specification = [allowed_contact_specification]
+        
+        #moving to pre_push position
+        self.mover.close_right_gripper(True)
+        self.mover.close_left_gripper(True)
+        start_push = traj_poses[0]
+        start_angle = traj_angles[0]
+        
+        rospy.loginfo("Moving to pre-push")
+        if move_arm(start_push, start_angle, frame, waiting_time = 30, 
+                                  ordered_collision_operations = collision_operation,
+                                  allowed_contacts = allowed_contact_specification):
+            rospy.loginfo("Pre-push movement ok")
+        else:
+            self.err_msg = "Planning Error"
+            return self.__getout("Pre-push planning returned with an error")
+        
+        
+        self.planner.joint_mover.time_to_reach = 5.0
+        self.mover.set_head_state(initial_head_position)
+        rospy.loginfo("Starting the push")
+        if not trajectory_mover(traj_poses,
+                         traj_angles,
+                         frame,
+                         max_vel=max_vel,
+                         ignore_errors=ignore_errors,
+                         normalize=normalize):
+            rospy.logerr("Strangely something when wrong when actually pushing!")
+            rospy.loginfo("Moving the %s back" % self.which_arm())
+            self.mover.set_arm_state(pre_push_joints,self.which_arm(),wait=True)
+            self.err_msg = "IK Error"
+            return False
+            
+        
+#        self.mover.execute_trajectory(trajectory, times, vels, self.which_arm(), True)
+         
+        rospy.loginfo("Moving the %s back" % self.which_arm())
+        self.mover.set_arm_state(pre_push_joints,self.which_arm(),wait=True)
+        return True
+
+  
+    def push_object(self, box_msg, ignore_errors=False, normalize=True,
+                    max_vel = 0.2):
+        """
+        Executes test_push and, if successfull, perform_push. Check the two
+        methods for a description of parameters.
+    
+        Return:
+        True on success, False otherwise.    
+        """
+        ret = self.test_push(box_msg, ignore_errors)
+        if ret:
+            traj_poses, traj_angles = ret
+            return self.perform_push(box_msg, traj_poses, traj_angles,
+                                     ignore_errors, normalize,
+                                     max_vel)
+        else:
+            return False
+
+    
+    def __push_object(self, box_msg, ignore_errors = False, normalize = True,
                     max_vel = 0.2):
 
         
