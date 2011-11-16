@@ -23,3 +23,5 @@ ROS_NOBUILD
 ignore/
 *.stack
 .idea/
+*ropeproject*
+*.swp
