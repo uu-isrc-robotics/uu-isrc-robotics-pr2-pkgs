@@ -129,6 +129,7 @@ class __RobotState(object):
         for joint in self.left_joint_names:
             if not joint in msg.name:
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+                return
             index = msg.name.index(joint)
             self.left_arm_positions.append(msg.position[index])
             
@@ -136,6 +137,7 @@ class __RobotState(object):
         for joint in self.right_joint_names:
             if not joint in msg.name:
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+                return
             index = msg.name.index(joint)
             self.right_arm_positions.append(msg.position[index])
             
@@ -143,6 +145,7 @@ class __RobotState(object):
         for joint in self.head_joint_names:
             if not joint in msg.name:
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+                return
             index = msg.name.index(joint)
             self.head_positions.append(msg.position[index])
         
@@ -150,6 +153,7 @@ class __RobotState(object):
         for joint in self.l_gripper_names:
             if not joint in msg.name:
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+                return
             index = msg.name.index(joint)
             self.l_gripper_positions.append(msg.position[index])    
         
@@ -157,6 +161,7 @@ class __RobotState(object):
         for joint in self.r_gripper_names:
             if not joint in msg.name:
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+                return
             index = msg.name.index(joint)
             self.r_gripper_positions.append(msg.position[index])
             
@@ -164,6 +169,7 @@ class __RobotState(object):
         for joint in self.torso_joint_names:
             if not joint in msg.name:
                 rospy.logerr("Error: joint %s is not in the joint_states!"%joint)
+                return
             index = msg.name.index(joint)
             self.torso_position.append(msg.position[index])
             
