@@ -5,7 +5,8 @@ The robot aligns with the object and move towards the edge of the table,
 until it stops.
 """
 
-import roslib; roslib.load_manifest('learn_actions')
+import roslib; 
+roslib.load_manifest('learn_actions')
 import smach
 import rospy
 import pr2_control_utilities
@@ -34,6 +35,7 @@ def publish_result(publisher, box, table, whicharm, torso_joint):
     msg.torso_joint = torso_joint
     
     publisher.publish(msg) 
+
 
 
 class ApproachTable(smach.State):
