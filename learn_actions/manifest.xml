@@ -15,6 +15,9 @@
   <depend package="rosbag"/>
   <depend package="rospy"/>
   <depend package="sensor_msgs"/>
+  <depend package="tf"/>
+  <depend package="geometry_msgs"/>
+
 
 </package>
 
