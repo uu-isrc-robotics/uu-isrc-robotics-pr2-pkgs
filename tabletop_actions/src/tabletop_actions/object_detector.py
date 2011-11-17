@@ -18,22 +18,26 @@ class ObjectDetector(object):
         narrow_detector = "object_detection"        
         rospy.loginfo("waiting for %s service" % narrow_detector)
         rospy.wait_for_service(narrow_detector)
-        self.narrow_detector =  rospy.ServiceProxy(narrow_detector, TabletopDetection)
+        self.narrow_detector =  rospy.ServiceProxy(narrow_detector, 
+                TabletopDetection)
         
         wide_detector = "wide_object_detection"        
         rospy.loginfo("waiting for %s service" % wide_detector)
         rospy.wait_for_service(wide_detector)
-        self.wide_detector =  rospy.ServiceProxy(wide_detector, TabletopDetection)
+        self.wide_detector =  rospy.ServiceProxy(wide_detector, 
+                TabletopDetection)
         
         box_detector = "find_cluster_bounding_box"
         rospy.loginfo("waiting for %s service" % box_detector)
         rospy.wait_for_service(box_detector)
-        self.box_detector =  rospy.ServiceProxy(box_detector, FindClusterBoundingBox)
+        self.box_detector =  rospy.ServiceProxy(box_detector, 
+                FindClusterBoundingBox)
         
         collision_processing = "/tabletop_collision_map_processing/tabletop_collision_map_processing"
         rospy.loginfo("Waiting for collision processing service to come up") 
         rospy.wait_for_service(collision_processing)
-        self.collision_processing = rospy.ServiceProxy(collision_processing, TabletopCollisionMapProcessing)
+        self.collision_processing = rospy.ServiceProxy(collision_processing, 
+                TabletopCollisionMapProcessing)
         
         self.box_drawer = rospy.Publisher("box_drawer", 
                                           Marker
@@ -240,8 +244,8 @@ class ObjectDetector(object):
             object_cluster = finder(clusters) 
             box_msg = self.detect_bounding_box(cluster = object_cluster)
         
-        if box_msg is None:
-            return False
+            if box_msg is None: #still!!
+                return False
         position = (box_msg.pose.pose.position.x,
                     box_msg.pose.pose.position.y,
                     box_msg.pose.pose.position.z)
@@ -275,6 +279,11 @@ class ObjectDetector(object):
                           max_pan=0.4, min_pan=-0.4,
                           max_tilt = 1.1, min_tilt = 0.8):    
 
+        """
+        
+        Returns:
+        True if successfull, False otherwise
+        """
         #first try without moving        
         if self.point_head_at(mover,cluster_choser = cluster_choser):
             return True
