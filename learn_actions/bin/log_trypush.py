@@ -29,6 +29,7 @@ def main():
                                             pusher_r, 
                                             pusher_l,
                                             joint_mover,
+                                            base_mover,
                                             tf_listener = planner.tf_listener)
     joyaction = learn_actions.JoyAction(3, logger.try_push_and_publish)
 

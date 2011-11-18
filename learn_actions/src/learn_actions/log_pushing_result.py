@@ -1,12 +1,12 @@
 import roslib 
 roslib.load_manifest('learn_actions')
 import rospy
-#import pr2_control_utilities
-#import tabletop_actions.object_detector as object_detector
-#import tabletop_actions.pushers as pushers
-#from learn_actions.msg import ObjectDiscovery
 import tf
 from learn_actions.msg import ObjectDiscovery
+from learn_actions.msg import ObjectTableChangesWithMovement
+from geometry_msgs.msg import Point
+from pr2_control_utilities import utils
+import copy
 
 class LogPushingResult(object):
     """
@@ -15,10 +15,10 @@ class LogPushingResult(object):
     It stores the object in the specified frame of reference, which should 
     be external to the robot, so that it can try to detect it again with
     subsequent calls.
-    
     """
 
     def __init__(self, detector, pusher_l, pusher_r, joint_mover,
+            base_mover,
             static_frame = "odom_combined",
             tf_listener = None):
         """
@@ -28,6 +28,7 @@ class LogPushingResult(object):
         pusher_l: a LeftArmPusher instance
         pusher_r: a RightArmPusher instance
         joint_mover: a Pr2JointMover instance
+        base_mover: a PR2BaseMover instance
         static_frame: a frame independent from the robot motion
         tf_listener: a TransformListener
         """
@@ -35,6 +36,7 @@ class LogPushingResult(object):
         self.pusher_l = pusher_l
         self.pusher_r = pusher_r
         self.joint_mover = joint_mover
+        self.base_mover = base_mover
         self.static_frame = static_frame
     
         self.object_pose = None #it will become a triplet
@@ -45,6 +47,20 @@ class LogPushingResult(object):
     
         self.obj_discovery_pub = rospy.Publisher("object_discovery", 
                 ObjectDiscovery)
+        self.obj_changes_pub = rospy.Publisher("object_changes", 
+                ObjectTableChangesWithMovement)
+
+        #initializing the fillin strucure
+        self.fillin_changes_msg = ObjectTableChangesWithMovement()
+        self.fillin_changes_msg.pre_movement_object_pose = None
+        self.fillin_changes_msg.pre_movement_table = None
+        self.prev_trans, self.prev_rot = base_mover.current_position(
+                frame=self.static_frame)
+        self.fillin_changes_msg.dx = 0.
+        self.fillin_changes_msg.dy = 0.
+        self.fillin_changes_msg.dtheta = 0.
+        self.fillin_changes_msg.post_movement_object_pose = None
+        self.fillin_changes_msg.post_movement_table = None
 
         rospy.loginfo("LogPushingResult is ready")
 
@@ -90,9 +106,69 @@ class LogPushingResult(object):
                            pos.pose.position.y,
                            pos.pose.position.z
                           )
+
         return res
 
-    def publish_result(self, box, table, whicharm, torso_joint):
+
+    def publish_object_changes(self):
+        """
+        Publishes the ObjectTableChangesWithMovement msg, unless one of the
+        fields is None. Also it rotates the premotion and postmotion fields,
+        and it updates the displacement fields.
+
+        Sends the new message unless any of the premovement field is None
+        Parameters:
+        """
+
+        #the premovement is updated with the previous postmovement
+        self.fillin_changes_msg.pre_movement_object_pose = copy.copy(
+                self.fillin_changes_msg.post_movement_object_pose)
+        self.fillin_changes_msg.pre_movement_table = copy.copy(
+                self.fillin_changes_msg.post_movement_table)
+
+
+        #the postmovement is updated with the current reading
+        box = self.detector.last_box_msg
+        table = self.detector.last_detection_msg.detection.table
+
+        newpos = Point()
+        newpos.x = box.pose.pose.position.x
+        newpos.y = box.pose.pose.position.y
+        newpos.z = box.pose.pose.position.z
+
+        self.fillin_changes_msg.post_movement_object_pose = newpos
+        self.fillin_changes_msg.post_movement_table = table
+
+        #the displacement is updated
+        trans, rot = self.base_mover.current_position(frame=self.static_frame)
+        rospy.loginfo("Current trans: %s, rot: %s", trans, rot)
+
+        robot_trans = utils.convert_point(self.tf_listener,
+                                          (self.prev_trans[0],
+                                           self.prev_trans[1],
+                                           0
+                                          ),
+                                          self.static_frame,
+                                          "/base_link"
+                                         )
+
+        dtheta = rot[2] - self.prev_rot[2]
+
+        self.fillin_changes_msg.dx =  -robot_trans[0]
+        self.fillin_changes_msg.dy = -robot_trans[1]
+        self.fillin_changes_msg.dtheta = dtheta
+        self.prev_trans = trans
+        self.prev_rot = rot
+
+        #unless any of the premovement fields is None, send the message
+        if (self.fillin_changes_msg.pre_movement_object_pose is not None and
+                self.fillin_changes_msg.pre_movement_table is not None):
+            rospy.loginfo("Ready to publish!")
+            self.obj_changes_pub.publish(self.fillin_changes_msg)
+        else:
+            rospy.loginfo("Not publishing yet, the premovement is None")
+        
+    def publish_object_discovery(self, box, table, whicharm, torso_joint):
         """
         Compose an ObjectDiscovery message out of the various parameters.
 
@@ -127,6 +203,8 @@ class LogPushingResult(object):
             rospy.logwarn("Object not found, no publishing will be done")
             return
 
+        self.publish_object_changes()
+
         box = self.detector.last_box_msg
         table = self.detector.last_detection_msg.detection.table
         
@@ -134,7 +212,7 @@ class LogPushingResult(object):
         ret =  self.pusher_l.test_push(box)
         if ret is not None:
             rospy.loginfo("Pushing with left arm is ok")
-            self.publish_result(box,  table,
+            self.publish_object_discovery(box,  table,
                            ObjectDiscovery.LEFT_ARM,
                            self.joint_mover.robot_state.torso_position[0]
                           )
@@ -144,14 +222,14 @@ class LogPushingResult(object):
             ret =  self.pusher_r.test_push(box)
             if ret is not None:
                 rospy.loginfo("Pushing with right arm is ok")
-                self.publish_result(box,  table,
+                self.publish_object_discovery(box,  table,
                            ObjectDiscovery.RIGHT_ARM,
                            self.joint_mover.robot_state.torso_position[0]
                           )
                 return "success"
             else:
                 rospy.logerr("Pushing is not feasible")
-                self.publish_result(box,  table,
+                self.publish_object_discovery(box,  table,
                            ObjectDiscovery.FAIL,
                            self.joint_mover.robot_state.torso_position[0]
                           )

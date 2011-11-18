@@ -10,7 +10,7 @@ geometry_msgs/Point pre_movement_object_pose
 #the table message, before moving
 tabletop_object_detector/Table pre_movement_table
 
-#the performed movement
+#the performed displacement
 float64 dx
 float64 dy
 float64 dtheta
