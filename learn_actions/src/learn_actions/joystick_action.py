@@ -3,7 +3,7 @@ roslib.load_manifest("learn_actions")
 import rospy
 from sensor_msgs.msg import Joy
 
-class JoyStickAction(object):
+class JoyAction(object):
     """
     Register a callback function, and when a joystick button is pressed 
     execute the action.
@@ -35,7 +35,7 @@ def test():
     def print_hello():
         rospy.loginfo("Hello")
 
-    JoyStickAction(3, print_hello)
+    JoyAction(3, print_hello)
 
 
 if __name__ == "__main__":
