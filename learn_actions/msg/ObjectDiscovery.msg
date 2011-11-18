@@ -1,5 +1,5 @@
 Header header
-#the object position in the base_frame. z is ignored
+#the object position in the base_frame.
 geometry_msgs/Point object_pose
 #the table message
 tabletop_object_detector/Table table
