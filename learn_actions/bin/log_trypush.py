@@ -26,8 +26,8 @@ def main():
                                                     )
 
     logger = learn_actions.LogPushingResult(detector, 
-                                            pusher_r, 
-                                            pusher_l,
+                                            pusher_l, 
+                                            pusher_r,
                                             joint_mover,
                                             base_mover,
                                             tf_listener = planner.tf_listener)
