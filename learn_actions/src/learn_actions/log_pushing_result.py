@@ -89,7 +89,8 @@ class LogPushingResult(object):
                 max_pan = head_pan + 0.2,
                 min_pan = head_pan - 0.2,
                 max_tilt = head_tilt + 0.1,
-                min_tilt = head_tilt - 0.1
+                min_tilt = head_tilt - 0.1,
+                cluster_choser = "find_closest_cluster"
                 )
 
         if res:
