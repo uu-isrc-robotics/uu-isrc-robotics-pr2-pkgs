@@ -118,7 +118,7 @@ class ApproachTable(smach.State):
 class TryToPush(smach.State):
     def __init__(self, pusher_r, pusher_l,detector, joint_mover, pub):
         smach.State.__init__(self,
-                             outcomes = ["success", "failure"],
+                             outcomes = ["l_arm", "r_arm", "failure"],
                              input_keys =  ["obj_pos"
                                             ],
                              output_keys = []
@@ -164,40 +164,26 @@ class TryToPush(smach.State):
         if ret is not None:
             traj_pos, traj_angles = ret
             rospy.loginfo("Pushing with left arm is ok")
-            publish_result(self.publisher, 
-                           box,  table,
-                           ObjectDiscovery.LEFT_ARM,
-                           self.joint_mover.robot_state.torso_position[0]
-                          )
-            return "success"
+            return "l_arm"
         else: 
             rospy.loginfo("Trying the right pusher")
             ret = self.pusher_r.test_push(box)
             if ret is not None:
                 rospy.loginfo("Pushing with right arm is ok")
-                publish_result(self.publisher, 
-                           box,  table,
-                           ObjectDiscovery.RIGHT_ARM,
-                           self.joint_mover.robot_state.torso_position[0]
-                          )
-                return "success"
+                return "r_arm"
             else:
                 rospy.logerr("Pushing is not feasible")
-                publish_result(self.publisher, 
-                           box,  table,
-                           ObjectDiscovery.FAIL,
-                           self.joint_mover.robot_state.torso_position[0]
-                          )
                 return "failure" 
 
 def create_fsm(base_mover, detector, joint_mover, pusher_r, pusher_l, pub):
-    sm =  smach.StateMachine(outcomes=["success", "failure"])
+    sm =  smach.StateMachine(outcomes=["l_arm", "r_arm", "failure"])
 
     with sm:
         smach.StateMachine.add("TryToPush1",  TryToPush(pusher_r, pusher_l,
                                                     detector, joint_mover,
                                                     pub),
-                               transitions = {"success" : "success",
+                               transitions = {"l_arm" : "l_arm",
+                                              "r_arm" : "r_arm",
                                              "failure" : "ApproachTable"},
                                remapping =  {"obj_pos" : "obj_pos"}
                               )
@@ -211,7 +197,8 @@ def create_fsm(base_mover, detector, joint_mover, pusher_r, pusher_l, pub):
         smach.StateMachine.add("TryToPush2",  TryToPush(pusher_r, pusher_l,
                                                     detector, joint_mover,
                                                     pub),
-                               transitions = {"success" : "success",
+                               transitions = {"l_arm" : "l_arm",
+                                              "r_arm" : "r_arm",
                                              "failure" : "failure"},
                                remapping =  {"obj_pos" : "obj_pos"}
                               )
