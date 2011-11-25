@@ -60,16 +60,16 @@ class PR2BaseMover(object):
     def __init__(self, listener = None,
                  use_controller = True,
                  use_move_base = False,
-                 use_safety_dist = True
+                 use_safety_dist = True,
+                 base_controller_name = "/base_controller/command",
+                 make_plan_service = "/move_base_local_node/make_pl",
+                 move_base_action = "/move_base_local",        
                  ):
 
         self.use_controller = use_controller
         self.use_move_base = use_move_base
         self.use_safety_dist = use_safety_dist
 
-        base_controller_name = "/base_controller/command"
-        make_plan_service = "/move_base_local_node/make_plan"
-        move_base_action = "/move_base_local"
 
         if listener is None:        
             self.listener = tf.TransformListener()
