@@ -58,7 +58,7 @@ class Pusher(object):
         self.__draw_poses(traj_poses, frame)
         
         
-        rospy.loginfo("Testing is pushing trajectory is feasible")
+        rospy.loginfo("Testing if pushing trajectory is feasible")
         traj_angles = [traj_angles] * len(traj_poses)
         res = trajectory_creator(traj_poses,
                                  traj_angles,
