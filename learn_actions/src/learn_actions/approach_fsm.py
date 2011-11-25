@@ -14,7 +14,6 @@ import tabletop_actions.object_detector as object_detector
 import tabletop_actions.pushers as pushers
 from learn_actions.msg import ObjectDiscovery
 
-
 smach.set_loggers(rospy.loginfo,
                   rospy.logwarn,
                   lambda s: None,
@@ -50,11 +49,14 @@ class ApproachTable(smach.State):
         smach.State.__init__(self,
                              outcomes = ["success", "failure"],
                              input_keys =  ["table_dims",
-                                            "obj_pos"
+                                            "obj_pos",
+                                            "obj_world_pos"
                                             ],
                              output_keys = ["table_dims",
-                                            "obj_pos"]
+                                            "obj_pos",
+                                            "obj_world_pos"]
                              )
+        self.listener = base_mover.listener
         self.base_mover = base_mover
         self.detector = detector
         self.joint_mover = joint_mover
@@ -83,16 +85,35 @@ class ApproachTable(smach.State):
     def execute(self, userdata):
         rospy.loginfo("Executing state ApproachTable")
 
+        static_frame = "/odom_combined"
         try:
             table_dims = userdata.table_dims
             obj_pos = userdata.obj_pos
+            obj_world_pos = userdata.obj_world_pos
+            rospy.loginfo("All good, got the data")
         except KeyError:
             rospy.loginfo("No table given, going with the detector")
             ret = self.detect()
             if ret is None:
                 return "failure"
             table_dims, obj_pos = ret
+            rospy.loginfo("Object found, storing its transformation in the frame %s",
+                    static_frame)
+            self.listener.waitForTransform(static_frame,
+                    self.detector.last_box_msg.pose.header.frame_id,
+                    rospy.Time(0),
+                    rospy.Duration(1)
+                    )
+            pos = self.listener.transformPose(static_frame, 
+                    self.detector.last_box_msg.pose)
+            obj_world_pos = (pos.pose.position.x,
+                             pos.pose.position.y,
+                             pos.pose.position.z
+                            )
 
+        #This table is (probably) in the base_link frame of reference!!!
+        #Here we are assuming the robot didn't move, otherwise this won't work
+        #TODO convert the table to a static frame, then convert it back
         dx = table_dims[0] #xmin
         dy = obj_pos[1] #y
         
@@ -101,14 +122,15 @@ class ApproachTable(smach.State):
         ret = self.base_mover.drive_to_displacement((dx, dy, 0),
                                     safety_dist = 0.15
                                     )
-        userdata.obj_pos = (obj_pos[0] - dx,
-                            obj_pos[1] - dy,
+        userdata.obj_pos = (obj_pos[0],
+                            obj_pos[1],
                             obj_pos[2])
-        userdata.table_dims = (table_dims[0] - dx,
-                               table_dims[1] - dx,
-                               table_dims[2] - dy,
-                               table_dims[3] - dy,
+        userdata.table_dims = (table_dims[0],
+                               table_dims[1],
+                               table_dims[2],
+                               table_dims[3],
                               )
+        userdata.obj_world_pos = obj_world_pos
 
         if ret:
             return "success"
@@ -119,9 +141,12 @@ class TryToPush(smach.State):
     def __init__(self, pusher_r, pusher_l,detector, joint_mover, pub):
         smach.State.__init__(self,
                              outcomes = ["l_arm", "r_arm", "failure"],
-                             input_keys =  ["obj_pos"
-                                            ],
-                             output_keys = []
+                             input_keys =  [
+                                            "obj_world_pos"
+                                           ],
+                             output_keys = [
+                                            "obj_world_pos"
+                                           ]
                              )
  
         self.pusher_r = pusher_r
@@ -132,7 +157,10 @@ class TryToPush(smach.State):
 
     def detect(self, obj_pos=None):
         if obj_pos is not None:
-            self.joint_mover.point_head_to(obj_pos, "base_link")
+            self.joint_mover.time_to_reach = 1.0
+            self.joint_mover.point_head_to(obj_pos, "/odom_combined")
+            rospy.sleep(2.0)
+            self.joint_mover.time_to_reach = 5.0
         if not self.detector.search_for_object(self.joint_mover, trials=15,  
                                       cluster_choser="find_closest_cluster", 
                                       max_pan=0.5, min_pan=-0.5,
@@ -148,12 +176,13 @@ class TryToPush(smach.State):
         rospy.loginfo("Executing state TryToPush")
         
         try:
-           obj_pos = userdata.obj_pos
+            obj_world_pos = userdata.obj_world_pos
+            rospy.loginfo("I know where the object is in the world")
         except KeyError:
-            rospy.loginfo("no known object position")
-            obj_pos = None
+            rospy.loginfo("no known world object position")
+            obj_world_pos = None
         
-        box = self.detect(obj_pos)
+        box = self.detect(obj_world_pos)
         table = self.detector.last_detection_msg.detection.table
         
         if box is None:
@@ -175,18 +204,20 @@ class TryToPush(smach.State):
                 rospy.logerr("Pushing is not feasible")
                 return "failure" 
 
+        #TODO put the locations back on userdata
+
 def create_fsm(base_mover, detector, joint_mover, pusher_r, pusher_l, pub):
     sm =  smach.StateMachine(outcomes=["l_arm", "r_arm", "failure"])
 
     with sm:
-        smach.StateMachine.add("TryToPush1",  TryToPush(pusher_r, pusher_l,
-                                                    detector, joint_mover,
-                                                    pub),
-                               transitions = {"l_arm" : "l_arm",
-                                              "r_arm" : "r_arm",
-                                             "failure" : "ApproachTable"},
-                               remapping =  {"obj_pos" : "obj_pos"}
-                              )
+        #smach.StateMachine.add("TryToPush1",  TryToPush(pusher_r, pusher_l,
+        #                                            detector, joint_mover,
+        #                                            pub),
+        #                       transitions = {"l_arm" : "l_arm",
+        #                                      "r_arm" : "r_arm",
+        #                                     "failure" : "ApproachTable"},
+        #                       remapping =  {"obj_pos" : "obj_pos"}
+        #                      )
         smach.StateMachine.add("ApproachTable", ApproachTable(base_mover,
                                                  detector, joint_mover),
                                transitions = {"success" : "TryToPush2",
