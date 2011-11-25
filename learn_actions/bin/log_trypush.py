@@ -34,6 +34,6 @@ def main():
     joyaction = learn_actions.JoyAction(3, logger.try_push_and_publish)
 
 if __name__ == "__main__":
-    rospy.init_node("logt_trypush", anonymous=True)
+    rospy.init_node("log_trypush", anonymous=True)
     main()
     rospy.spin()
