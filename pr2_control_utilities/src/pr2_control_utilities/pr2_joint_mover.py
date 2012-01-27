@@ -389,16 +389,33 @@ class PR2JointMover(object):
         except:
             rospy.logerr("failed to publish head position!")
 
-    def point_head_to(self, position, frame):
+    def point_head_to(self, position, frame, pointing_frame = None,
+            pointing_axis = None):
+        """Point the head to the (x,y,z) tuple specified by position in the
+        passed frame. Default pointing frame is head_tilt_link with axis
+        [1,0,0].
+        """
         goal = PointHeadGoal()
+
+        if pointing_frame is None:
+            pointing_frame = "head_tilt_link"
+        if pointing_axis is None:
+            pointing_axis = [1,0,0]
         
         goal.target.header.frame_id =  frame
         goal.target.point.x = position[0]
         goal.target.point.y = position[1]
         goal.target.point.z = position[2]
+        
+        goal.pointing_frame = pointing_frame
+        goal.pointing_axis.x = pointing_axis[0]
+        goal.pointing_axis.y = pointing_axis[1]
+        goal.pointing_axis.z = pointing_axis[2]
+
         goal.min_duration = rospy.Duration(self.time_to_reach)
         
-        self.head_pointer_client.send_goal_and_wait(goal, rospy.Duration(self.time_to_reach))
+        self.head_pointer_client.send_goal_and_wait(goal, 
+                rospy.Duration(self.time_to_reach))
 
     def set_torso_state(self, jval, wait=False):
         """ Sets goal for torso using provided value"""
