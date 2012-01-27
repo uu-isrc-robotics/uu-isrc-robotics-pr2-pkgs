@@ -28,7 +28,8 @@ def convert_to_posestamped(listener, pos, rot, from_frame, to_frame):
     zeropose.pose.position.x = pos[0]
     zeropose.pose.position.y = pos[1]
     zeropose.pose.position.z = pos[2]
-    quaternion = tf.transformations.quaternion_from_euler(rot[0], rot[1], rot[2], axes="rxyz")
+    quaternion = tf.transformations.quaternion_from_euler(rot[0], 
+            rot[1], rot[2], axes="rxyz")
     zeropose.pose.orientation.x = quaternion[0]
     zeropose.pose.orientation.y = quaternion[1]
     zeropose.pose.orientation.z = quaternion[2]

@@ -55,21 +55,29 @@ def sign_zero(x):
         return -1.
     else:
         return 0
+    
+def fix_angle(angle):
+    if angle > math.pi:
+        return angle - 2. * math.pi
+    elif angle < -math.pi:
+        return 2.*math.pi + angle 
+    else: 
+        return angle
 
 class PR2BaseMover(object):
     def __init__(self, listener = None,
                  use_controller = True,
                  use_move_base = False,
-                 use_safety_dist = True
+                 use_safety_dist = True,
+                 base_controller_name = "/base_controller/command",
+                 make_plan_service = "/move_base_local_node/make_pl",
+                 move_base_action = "/move_base_local",        
                  ):
 
         self.use_controller = use_controller
         self.use_move_base = use_move_base
         self.use_safety_dist = use_safety_dist
 
-        base_controller_name = "/base_controller/command"
-        make_plan_service = "/move_base_local_node/make_plan"
-        move_base_action = "/move_base_local"
 
         if listener is None:        
             self.listener = tf.TransformListener()
@@ -110,6 +118,8 @@ class PR2BaseMover(object):
     def __tilt_laser_cbk(self, laser_data):
         self.__tilt_laser = laser_data 
 
+
+
     def drive_to_displacement(self, pos,
                               inhibit_x = False,
                               inhibit_y = False,
@@ -126,7 +136,7 @@ class PR2BaseMover(object):
                                           "/base_link", 
                                           "odom_combined")
         _ , rot = self.current_position()        
-        desired_rot = rot[2] + pos[2]
+        desired_rot = fix_angle(rot[2] + pos[2])
         
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
@@ -140,7 +150,7 @@ class PR2BaseMover(object):
             else:
                 dy = 0
             if not inhibit_theta:
-                dtheta = desired_rot - curr_rot[2]
+                dtheta = fix_angle(desired_rot - curr_rot[2])
             else:
                 dtheta = 0
 

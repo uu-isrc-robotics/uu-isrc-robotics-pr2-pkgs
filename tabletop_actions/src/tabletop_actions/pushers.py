@@ -16,6 +16,7 @@ class Pusher(object):
         self.planner = planner
         self.collision_objects__markers_pub = rospy.Publisher("pusher_trajectory", 
                                                               Marker, 
+                                                              tcp_nodelay=True,
                                                               latch=True)
         self.collision_objects_pub = rospy.Publisher("collision_object", CollisionObject)
         self.robot_state = robot_state
@@ -57,7 +58,7 @@ class Pusher(object):
         self.__draw_poses(traj_poses, frame)
         
         
-        rospy.loginfo("Testing is pushing trajectory is feasible")
+        rospy.loginfo("Testing if pushing trajectory is feasible")
         traj_angles = [traj_angles] * len(traj_poses)
         res = trajectory_creator(traj_poses,
                                  traj_angles,
@@ -448,7 +449,7 @@ class LeftArmLateralPusher(LateralPusher):
         poses = []
         start_y = boxpose[1] + self.linear_resolution
         end_y = boxpose[1] - self.linear_resolution
-        for y in numpy.linspace(start_y, end_y, self.traj_points, endpoint = True) :
+        for y in numpy.linspace(start_y, end_y, self.traj_points, endpoint = True):
             poses.append((boxpose[0],
                           y,
                           boxpose[2] + self.traj_z_offset))
@@ -476,7 +477,7 @@ class RightArmLateralPusher(LateralPusher):
         poses = []
         start_y = boxpose[1] - self.linear_resolution
         end_y = boxpose[1] + self.linear_resolution
-        for y in numpy.linspace(start_y,end_y,self.traj_points, endpoint = True) :
+        for y in numpy.linspace(start_y,end_y,self.traj_points, endpoint = True):
             poses.append((boxpose[0],
                           y,
                           boxpose[2] + self.traj_z_offset))

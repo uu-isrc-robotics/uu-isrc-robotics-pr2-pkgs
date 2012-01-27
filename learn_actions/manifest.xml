@@ -1,0 +1,24 @@
+<package>
+  <description brief="learn_actions">
+
+    Set of scripts-msgs-stuff for autonomous skills learning
+    and improving. 
+
+  </description>
+  <author>Lorenzo Riano &lt;lorenzo.riano@gmail.com&gt;</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/learn_actions</url>
+  <depend package="pr2_control_utilities"/>
+  <depend package="tabletop_actions"/>
+  <depend package="smach"/>
+  <depend package="rosbag"/>
+  <depend package="rospy"/>
+  <depend package="sensor_msgs"/>
+  <depend package="tf"/>
+  <depend package="geometry_msgs"/>
+
+
+</package>
+
+
