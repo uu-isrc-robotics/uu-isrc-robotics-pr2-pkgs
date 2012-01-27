@@ -201,7 +201,23 @@ class PR2MoveArm(object):
             return True
         else:
             return False
+   
+    def get_right_gripper_pose(self):
+        """Returns a PoseStamped with the position/orientation of the
+        right gripper.
+        """
+        link_name = "r_wrist_roll_link"
+        joint_angles = self.joint_mover.robot_state.right_arm_positions
+        return self.right_ik.run_fk(joint_angles, link_name)
     
+    def get_left_gripper_pose(self):
+        """Returns a PoseStamped with the position/orientation of the
+        left gripper.
+        """
+        link_name = "l_wrist_roll_link"
+        joint_angles = self.joint_mover.robot_state.left_arm_positions
+        return self.left_ik.run_fk(joint_angles, link_name)
+
     def move_right_arm_non_collision(self, position, orientation, 
                                      frame_id,
                                      time_required = 1.0,
