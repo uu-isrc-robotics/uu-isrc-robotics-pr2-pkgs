@@ -8,6 +8,7 @@ import glob
 import sys
 import cPickle
 from optparse import OptionParser
+import itertools
 
 def main():
     parser = OptionParser()
@@ -29,9 +30,13 @@ def main():
     
     inpt_mat = []
     oupt_mat = []
+
+    table_inpt = []
+    table_out = []
     
     print options.input_file
-    for filename in glob.glob(options.input_file):
+    gen = (glob.glob(f) for f in options.input_file.split())
+    for filename in itertools.chain.from_iterable(gen):
         rospy.loginfo("Opening bag %s"% filename)
         bag = rosbag.Bag(filename)
         for _, msg, _ in bag.read_messages(topics="object_changes"):
@@ -49,12 +54,31 @@ def main():
                           msg.post_movement_object_pose.z,
                          )
             oupt_mat.append(output_vec)
-    
+
+            input_vec = (msg.pre_movement_table.x_min,
+                         msg.pre_movement_table.y_min,
+                         msg.pre_movement_table.x_max,
+                         msg.pre_movement_table.y_max,
+                         msg.dx,
+                         msg.dy,
+                         msg.dtheta
+                        )
+            table_inpt.append(input_vec)
+            output_vec = (msg.post_movement_table.x_min,
+                          msg.post_movement_table.y_min,
+                          msg.post_movement_table.x_max,
+                          msg.post_movement_table.y_max,
+                         )
+            table_out.append(output_vec)
+   
     inpt_mat = numpy.array(inpt_mat)
     oupt_mat = numpy.array(oupt_mat)
+    table_inpt = numpy.array(table_inpt)
+    table_out = numpy.array(table_out)
+    rospy.loginfo("%d entries read", inpt_mat.shape[0])
 
     ofile = open(options.output_file, "w")
-    cPickle.dump((inpt_mat, oupt_mat), ofile)
+    cPickle.dump((inpt_mat, oupt_mat, table_inpt, table_out), ofile)
     ofile.close()
 
 if __name__ == "__main__":

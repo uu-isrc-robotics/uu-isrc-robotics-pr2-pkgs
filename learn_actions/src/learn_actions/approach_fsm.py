@@ -193,12 +193,15 @@ class TryToPush(smach.State):
         if ret is not None:
             traj_pos, traj_angles = ret
             rospy.loginfo("Pushing with left arm is ok")
+            self.pusher_l.perform_push(box, traj_pos, traj_angles)
             return "l_arm"
         else: 
             rospy.loginfo("Trying the right pusher")
             ret = self.pusher_r.test_push(box)
             if ret is not None:
                 rospy.loginfo("Pushing with right arm is ok")
+                traj_pos, traj_angles = ret
+                self.pusher_r.perform_push(box, traj_pos, traj_angles)
                 return "r_arm"
             else:
                 rospy.logerr("Pushing is not feasible")

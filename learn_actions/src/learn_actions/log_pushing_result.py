@@ -193,7 +193,18 @@ class LogPushingResult(object):
         msg.torso_joint = torso_joint
 
         self.obj_discovery_pub.publish(msg) 
-        
+    
+    def search_and_detect_changes_publisher(self):
+        """
+        Searches for an object and, if it's found, checks if it can push it.
+        """
+        if not self.search_object():
+            rospy.logwarn("Object not found, no publishing will be done")
+            return
+
+        self.publish_object_changes()
+
+
     def try_push_and_publish(self):
         """
         Searches for an object and, if it's found, checks if it can push it.
