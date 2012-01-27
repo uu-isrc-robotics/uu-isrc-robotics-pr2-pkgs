@@ -55,6 +55,14 @@ def sign_zero(x):
         return -1.
     else:
         return 0
+    
+def fix_angle(angle):
+    if angle > math.pi:
+        return angle - 2. * math.pi
+    elif angle < -math.pi:
+        return 2.*math.pi + angle 
+    else: 
+        return angle
 
 class PR2BaseMover(object):
     def __init__(self, listener = None,
@@ -110,6 +118,8 @@ class PR2BaseMover(object):
     def __tilt_laser_cbk(self, laser_data):
         self.__tilt_laser = laser_data 
 
+
+
     def drive_to_displacement(self, pos,
                               inhibit_x = False,
                               inhibit_y = False,
@@ -126,7 +136,7 @@ class PR2BaseMover(object):
                                           "/base_link", 
                                           "odom_combined")
         _ , rot = self.current_position()        
-        desired_rot = rot[2] + pos[2]
+        desired_rot = fix_angle(rot[2] + pos[2])
         
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
@@ -140,7 +150,7 @@ class PR2BaseMover(object):
             else:
                 dy = 0
             if not inhibit_theta:
-                dtheta = desired_rot - curr_rot[2]
+                dtheta = fix_angle(desired_rot - curr_rot[2])
             else:
                 dtheta = 0
 
