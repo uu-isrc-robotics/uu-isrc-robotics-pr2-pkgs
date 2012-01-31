@@ -168,7 +168,46 @@ class PR2MoveArm(object):
                                ordered_collision_operations, 
                                allowed_contacts)
         
-    
+   
+    def __check_ik_feasible(self, arm, pose_stamped):
+        if arm == "right_arm":
+            link_name = "r_wrist_roll_link"
+            joint_angles = self.joint_mover.robot_state.right_arm_positions
+            ik = self.right_ik 
+        elif arm == "left_arm":
+            link_name = "l_wrist_roll_link"
+            joint_angles = self.joint_mover.robot_state.left_arm_positions
+            ik = self.left_ik 
+        else:
+            rospy.logerr("Unknown arm: %s"%arm)
+            return False
+
+        res = ik.run_ik(pose_stamped, joint_angles, link_name, collision_aware=0)
+        if res is None:
+            return False
+        elif len(res[0]) == 0:
+            return False
+        else:
+            return True
+
+    def check_ik_right_arm(self, pose_stamped):
+        """
+        Returns True if pose_stamped is reachable by the right arm.
+
+        Parameters:
+        pose_stamped: a PoseStamped instance
+        """
+        return self.__check_ik_feasible("right_arm", pose_stamped)
+
+    def check_ik_left_arm(self, pose_stamped):
+        """
+        Returns True if pose_stamped is reachable by the left arm.
+
+        Parameters:
+        pose_stamped: a PoseStamped instance
+        """
+        return self.__check_ik_feasible("left_arm", pose_stamped)
+
     def __move_arm_non_collision(self, arm, position, orientation, frame_id,
                                  time_required):
         
