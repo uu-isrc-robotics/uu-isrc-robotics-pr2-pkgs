@@ -54,6 +54,20 @@ def convert_to_pos_rot(pos):
     
     pass
 
+def create_tuples_from_pose(pose):
+    """ Creates two tuples position (x,y,z) and rotation (x,y,z,w)
+    from a geometry_msgs/Pose
+    """
+    pos = (pose.position.x,
+               pose.position.y,
+               pose.position.z,
+              )
+    orientation = (pose.orientation.x,
+               pose.orientation.y,
+               pose.orientation.z,
+               pose.orientation.w,
+              )
+    return pos, orientation
 
 
 def convert_position(listener, pos, rot, from_frame, to_frame):
