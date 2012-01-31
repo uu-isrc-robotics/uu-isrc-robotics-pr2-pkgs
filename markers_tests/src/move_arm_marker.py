@@ -40,6 +40,7 @@ from interactive_markers.interactive_marker_server import (
 from interactive_markers.menu_handler import MenuHandler
 
 import copy
+import utils
 
 class MoveArmMarker(object):
     """
@@ -83,36 +84,8 @@ class MoveArmMarker(object):
         control.interaction_mode = InteractiveMarkerControl.BUTTON
         control.markers.append( marker )
         int_marker.controls.append( control )
-
-        #x movement
-        control = InteractiveMarkerControl()
-        control.name = "move_x"
-        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
-        control.orientation.w = 1
-        control.orientation.x = 1
-        control.orientation.y = 0
-        control.orientation.z = 0
-        int_marker.controls.append(control);
-
-        #y movement
-        control = InteractiveMarkerControl()
-        control.name = "move_y"
-        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
-        control.orientation.w = 1
-        control.orientation.x = 0
-        control.orientation.y = 1
-        control.orientation.z = 0
-        int_marker.controls.append(control);
-
-        #z movement
-        control = InteractiveMarkerControl()
-        control.name = "move_z"
-        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
-        control.orientation.w = 1
-        control.orientation.x = 0
-        control.orientation.y = 0
-        control.orientation.z = 1
-        int_marker.controls.append(control);
+        
+        utils.make_6DOF_marker(int_marker)
 
         #menu control
         menu_control = InteractiveMarkerControl()
@@ -162,7 +135,11 @@ class MoveArmMarker(object):
                feedback.pose.position.y,
                feedback.pose.position.z,
               )
-        orientation = (1,0,0,1)
+        orientation = (feedback.pose.orientation.x,
+               feedback.pose.orientation.y,
+               feedback.pose.orientation.z,
+               feedback.pose.orientation.w,
+              )
        
         rospy.loginfo("Moving the right arm")
         self.planner.move_right_arm(pos, orientation, frame, 2.0)
@@ -173,7 +150,11 @@ class MoveArmMarker(object):
                feedback.pose.position.y,
                feedback.pose.position.z,
               )
-        orientation = (1,0,0,1)
+        orientation = (feedback.pose.orientation.x,
+               feedback.pose.orientation.y,
+               feedback.pose.orientation.z,
+               feedback.pose.orientation.w,
+              )
        
         rospy.loginfo("Moving the right arm (non collision)")
         self.planner.move_right_arm_non_collision(pos, orientation, frame, 2.0)
@@ -184,7 +165,11 @@ class MoveArmMarker(object):
                feedback.pose.position.y,
                feedback.pose.position.z,
               )
-        orientation = (1,0,0,1)
+        orientation = (feedback.pose.orientation.x,
+               feedback.pose.orientation.y,
+               feedback.pose.orientation.z,
+               feedback.pose.orientation.w,
+              )
        
         rospy.loginfo("Moving the left arm")
         self.planner.move_left_arm(pos, orientation, frame, 2.0)
@@ -195,7 +180,11 @@ class MoveArmMarker(object):
                feedback.pose.position.y,
                feedback.pose.position.z,
               )
-        orientation = (1,0,0,1)
+        orientation = (feedback.pose.orientation.x,
+               feedback.pose.orientation.y,
+               feedback.pose.orientation.z,
+               feedback.pose.orientation.w,
+              )
        
         rospy.loginfo("Moving the left arm (non collision)")
         self.planner.move_left_arm_non_collision(pos, orientation, frame, 2.0)
