@@ -12,6 +12,8 @@
   <depend package="rospy"/>
   <depend package="visualization_msgs"/>
   <depend package="pr2_control_utilities"/>
+  <depend package="geometry_msgs"/>
+
 
 </package>
 
