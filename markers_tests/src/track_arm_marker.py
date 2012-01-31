@@ -33,11 +33,14 @@ import roslib; roslib.load_manifest("markers_tests")
 import rospy
 import copy
 import pr2_control_utilities
+import utils
+from geometry_msgs.msg import PoseStamped
 
 from interactive_markers.interactive_marker_server import (
         InteractiveMarkerServer, InteractiveMarker,
         Marker, InteractiveMarkerControl,
         )
+from visualization_msgs.msg import Marker
 from interactive_markers.menu_handler import MenuHandler
 
 class TrackArmMarker(object):
@@ -55,6 +58,8 @@ class TrackArmMarker(object):
         robot_state = pr2_control_utilities.RobotState()
         self.joint_controller = pr2_control_utilities.PR2JointMover(robot_state)
         self.planner = pr2_control_utilities.PR2MoveArm(self.joint_controller)
+        self.pose_publisher  = rospy.Publisher("/pezz_controller/command", 
+                                               PoseStamped)
         self.track_right = False
         self.track_left = False
         self.track_head = False
@@ -95,6 +100,16 @@ class TrackArmMarker(object):
         control.orientation.z = 0
         int_marker.controls.append(control);
 
+        #x rotation
+        control = InteractiveMarkerControl()
+        control.name = "rotate_x"
+        control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+        control.orientation.w = 1
+        control.orientation.x = 1
+        control.orientation.y = 0
+        control.orientation.z = 0
+        int_marker.controls.append(control);
+
         #y movement
         control = InteractiveMarkerControl()
         control.name = "move_y"
@@ -105,10 +120,30 @@ class TrackArmMarker(object):
         control.orientation.z = 0
         int_marker.controls.append(control);
 
+        #y rotation
+        control = InteractiveMarkerControl()
+        control.name = "rotate_y"
+        control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+        control.orientation.w = 1
+        control.orientation.x = 0
+        control.orientation.y = 1
+        control.orientation.z = 0
+        int_marker.controls.append(control);
+
         #z movement
         control = InteractiveMarkerControl()
         control.name = "move_z"
         control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
+        control.orientation.w = 1
+        control.orientation.x = 0
+        control.orientation.y = 0
+        control.orientation.z = 1
+        int_marker.controls.append(control);
+
+        #z rotation
+        control = InteractiveMarkerControl()
+        control.name = "rotate_z"
+        control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
         control.orientation.w = 1
         control.orientation.x = 0
         control.orientation.y = 0
@@ -170,13 +205,18 @@ class TrackArmMarker(object):
         if self.track_head:
             self.joint_controller.point_head_to(pos, frame)
 
+        posmsg = PoseStamped()
+        posmsg.header.frame_id = frame
+        posmsg.pose = feedback.pose
         if self.track_right:
-            self.planner.move_right_arm_non_collision(pos, 
-                                orientation, frame, 0.0)
+            self.pose_publisher.publish(posmsg)    
+	
+#            self.planner.move_right_arm_non_collision(pos, 
+#                               orientation, frame, 0.0)
         
-        if self.track_left:
-            self.planner.move_left_arm_non_collision(pos, 
-                                orientation, frame, 0.0)
+#        if self.track_left:
+#            self.planner.move_left_arm_non_collision(pos, 
+#                                orientation, frame, 0.0)
 
     def toggle_head(self, feedback):
         if self.track_head:
