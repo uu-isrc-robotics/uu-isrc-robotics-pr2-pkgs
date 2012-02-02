@@ -17,6 +17,7 @@ from interactive_markers.interactive_marker_server import (
 from interactive_markers.menu_handler import MenuHandler
 
 import utils
+import tf
 from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -48,24 +49,10 @@ class TrajectoryMarkers(object):
         self.server.insert(int_marker, self.main_callback)
 
         # create the main marker shape
-        marker = Marker()
-        marker.type = Marker.SPHERE
-        marker.scale.x = 0.1
-        marker.scale.y = 0.1
-        marker.scale.z = 0.1
-        marker.color.r = 1
-        marker.color.g = 0.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0
-
-        # create a non-interactive control which contains the sphere
-        control = InteractiveMarkerControl()
-        control.always_visible = True
-        control.interaction_mode = InteractiveMarkerControl.BUTTON
-        control.markers.append( marker )
-        int_marker.controls.append( control )
-        
+        utils.makeGripperMarker(int_marker)
+        #add the controls 
         utils.make_6DOF_marker(int_marker)
+
         self.int_marker = int_marker
         self.create_menu()
         self.server.applyChanges()
@@ -221,6 +208,7 @@ class TrajectoryMarkers(object):
         """
         Updates the planning scene.
         """
+        self.planner.take_static_map()
         self.planner.update_planning_scene()
 
     def publish_trajectory(self):
