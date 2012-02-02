@@ -5,18 +5,19 @@ All rights reserved.
 Various common utilities
 """
 
-from interactive_markers.interactive_marker_server import InteractiveMarkerControl
+from interactive_markers.interactive_marker_server import InteractiveMarkerControl 
 import tf
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Pose
 
 import numpy
 import rospy
 import copy
+import euclid
 
 def make_6DOF_marker(int_marker):
     """
-    Creates a 6DOF InteractiveMarkerContro that can be translated and rotated.
+    Creates a 6DOF InteractiveMarkerControl that can be translated and rotated.
 
     Parameters:
     int_marker: a previously created InteractiveMarker to attach the new marker
@@ -91,7 +92,7 @@ def axis_marker(pose_stamped, id,
     id: the id number for the x-arrow (y is id+1, z is id+2)
     ns: the namespace for the marker
     """
-    marker = Marker()
+    marker = Marker()    
     marker.header = pose_stamped.header
     marker.ns = ns
     marker.type = Marker.ARROW
@@ -132,3 +133,100 @@ def axis_marker(pose_stamped, id,
     marker3.color.b = 1.0
 
     return (marker, marker2, marker3)
+
+def matrix4ToPose(matrix):
+    """Converts a Matrix 4 to a Pose message by extracting the translation and
+    rotation specified by the Matrix.
+
+    Parameters:
+    matrix: a Matrix4 (euclid.py)
+    """
+    pos = Pose()
+    pos.position.x = matrix.d
+    pos.position.y = matrix.h
+    pos.position.z = matrix.e
+    
+    q = matrix.get_quaternion()
+    pos.orientation.x = q.x
+    pos.orientation.y = q.y
+    pos.orientation.z = q.z
+    pos.orientation.w = q.w
+
+    return pos
+
+
+def makeGripperMarker(int_marker, angle=0.541, color=None, scale=1.0):
+    """
+    Creates an InteractiveMarkerControl with the PR2 gripper shape. The new
+    marker is appended to the controls list of int_marker.
+
+    Parameters:
+    int_marker: a previously created InteractiveMarker to attach the new marker
+    to.
+    angle: boh!
+    color: (r,g,b,a) tuple or None (default) if using the material colors
+    scale: the scale of the gripper, default is 1.0
+    """
+
+    T1 = euclid.Matrix4()
+    T2 = euclid.Matrix4()
+
+    T1.translate(0.07691, 0.01, 0.)
+    T1.rotate_axis(angle, euclid.Vector3(0,0,1))
+    T2.translate(0.09137, 0.00495, 0.)
+    T1.rotate_axis(-angle, euclid.Vector3(0,0,1))
+
+    T_proximal = T1.copy()
+    T_distal = T1 * T2
+
+    control = InteractiveMarkerControl()
+    mesh = Marker()
+    mesh.type = Marker.MESH_RESOURCE
+    mesh.scale.x = scale
+    mesh.scale.y = scale
+    mesh.scale.z = scale
+    
+    if color is not None:
+        mesh.color.r = color[0]
+        mesh.color.g = color[1]
+        mesh.color.b = color[2]
+        mesh.color.a = color[3]
+        mesh.mesh_use_embedded_materials = False
+    else:
+        mesh.mesh_use_embedded_materials = True
+
+    mesh.mesh_resource = "package://pr2_description/meshes/gripper_v0/gripper_palm.dae"
+    mesh.pose.orientation.w = 1
+    control.markers.append(copy.deepcopy(mesh))
+    
+    mesh.mesh_resource = "package://pr2_description/meshes/gripper_v0/l_finger.dae"
+    mesh.pose = matrix4ToPose(T_proximal)
+    control.markers.append(copy.deepcopy(mesh))
+
+    mesh.mesh_resource = "package://pr2_description/meshes/gripper_v0/l_finger_tip.dae"
+    mesh.pose = matrix4ToPose(T_distal)
+    control.markers.append(copy.deepcopy(mesh))
+
+    T1 = euclid.Matrix4()
+    T2 = euclid.Matrix4()
+
+    T1.translate(0.07691, -0.01, 0.)
+    T1.rotate_axis(numpy.pi, euclid.Vector3(1,0,0))
+    T1.rotate_axis(angle, euclid.Vector3(0,0,1))
+    T2.translate(0.09137, 0.00495, 0.)
+    T1.rotate_axis(-angle, euclid.Vector3(0,0,1))
+
+    T_proximal = T1.copy()
+    T_distal = T1 * T2
+
+    mesh.mesh_resource = "package://pr2_description/meshes/gripper_v0/l_finger.dae"
+    mesh.pose = matrix4ToPose(T_proximal)
+    control.markers.append(copy.deepcopy(mesh))
+
+    mesh.mesh_resource = "package://pr2_description/meshes/gripper_v0/l_finger_tip.dae"
+    mesh.pose = matrix4ToPose(T_distal)
+    control.markers.append(copy.deepcopy(mesh))
+
+    control.interaction_mode = InteractiveMarkerControl.BUTTON
+    int_marker.controls.append(control)
+
