@@ -20,7 +20,7 @@ import utils
 from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
-class TrajectoryMarkers(object):
+class PR2TrajectoryMarkers(object):
     """
     A class to create and store a  trajectory for one PR2 arm. The created
     trajectory can be published as a PoseArray message.
@@ -65,7 +65,7 @@ class TrajectoryMarkers(object):
 
         self.trajectory = PoseArray()
         self.trajectory.header.frame_id = "/base_link"
-
+        rospy.loginfo("PR2TrajectoryMarkers (%s) is ready", whicharm)
 
     def create_menu(self):
         """
@@ -290,8 +290,18 @@ class TrajectoryMarkers(object):
 
 
 if __name__ == "__main__":
-    rospy.init_node("trajectory_markers")
-    server = TrajectoryMarkers("left")
+    import sys    
+    rospy.init_node("pr2_trajectory_markers")
+    if len(sys.argv) < 2:
+        rospy.logerr("Usage: %s [left|right]")
+        rospy.signal_shutdown("wrong arguments")
+        sys.exit()
+    if sys.argv[1] not in ("left", "right"):
+        rospy.logerr("Usage: %s [left|right]")
+        rospy.signal_shutdown("wrong_arguments")
+        sys.exit()
+
+    server = PR2TrajectoryMarkers(sys.argv[1])
     t = rospy.Rate(5)
     while not rospy.is_shutdown():
         server.publish_trajectory_markers(1./5)
