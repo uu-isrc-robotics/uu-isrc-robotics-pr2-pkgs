@@ -17,7 +17,6 @@ from interactive_markers.interactive_marker_server import (
 from interactive_markers.menu_handler import MenuHandler
 
 import utils
-import tf
 from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -25,6 +24,11 @@ class TrajectoryMarkers(object):
     """
     A class to create and store a  trajectory for one PR2 arm. The created
     trajectory can be published as a PoseArray message.
+
+    This class published on the following topics:
+    trajectory_markers_[whicharm] are the main interactive markers.
+    trajectory_poses_[whicharm] a markerarray to display the trajectory.
+    trajectory_poses_[whicarm] a posesarray with the resulting pose
 
     Constructor:
     TrajectoryMarkers(whicharm = "left")
@@ -38,8 +42,10 @@ class TrajectoryMarkers(object):
         self.planner = pr2_control_utilities.PR2MoveArm(self.joint_controller)
         self.server = InteractiveMarkerServer("trajectory_markers_" + whicharm)
 
-        self.visualizer_pub = rospy.Publisher("trajectory_markers_path",
+        self.visualizer_pub = rospy.Publisher("trajectory_markers_path_" + whicharm,
                 MarkerArray)
+        self.trajectory_pub = rospy.Publisher("trajectory_poses_" + whicharm, 
+                PoseArray)
         
         # create an interactive marker for our server
         int_marker = InteractiveMarker()
@@ -66,6 +72,8 @@ class TrajectoryMarkers(object):
         Create and populates all the menu entries
         """
         menu_handler = MenuHandler()
+        menu_handler.insert("Point the head", 
+                callback = self.move_head)
         menu_handler.insert("Add position to trajectory", 
                 callback = self.add_point)
         menu_handler.insert("Place marker over gripper", 
@@ -74,12 +82,14 @@ class TrajectoryMarkers(object):
                 callback = self.execute_trajectory)
         menu_handler.insert("Clear trajectory", 
                 callback = self.clear_trajectory)
-        menu_handler.insert("Point the head", 
-                callback = self.move_head)
+        menu_handler.insert("Publish trajectory", 
+                callback = self.publish_trajectory)
         menu_handler.insert("Move the arm (planning)", 
                 callback = self.plan_arm)
         menu_handler.insert("Move the arm (collision-free)", 
                 callback = self.collision_free_arm)
+        menu_handler.insert("Move the arm to trajectory start (collision-free)",
+                callback = self.arm_trajectory_start)
         menu_handler.insert("Update planning scene", 
                 callback = self.update_planning)
 
@@ -136,6 +146,24 @@ class TrajectoryMarkers(object):
             if not res:
                 rospy.logerr("Something went wrong when moving")
                 return
+    
+    def arm_trajectory_start(self, feedback):
+        """
+        Move the gripper to the first pose in the trajectory.
+        """
+        if len(self.trajectory.poses) == 0:
+            rospy.logwarn("Empty trajectory!")
+            return
+        pose =  self.trajectory.poses[0]
+        if self.whicharm == "right":
+            moveit = self.planner.move_right_arm_non_collision
+        else:
+            moveit = self.planner.move_left_arm_non_collision
+        pos, quat = create_tuples_from_pose(pose)
+        res = moveit(pos, quat, self.trajectory.header.frame_id, 1.0)
+        if not res:
+            rospy.logerr("Something went wrong when moving")
+            return
 
     def clear_trajectory(self, feedback):
         """
@@ -211,9 +239,19 @@ class TrajectoryMarkers(object):
         self.planner.take_static_map()
         self.planner.update_planning_scene()
 
-    def publish_trajectory(self):
+    def publish_trajectory(self, feedback):
+        """
+        Publishes the trajectory as a PoseArray message
+        """
+        self.trajectory_pub.publish(self.trajectory)
+
+    def publish_trajectory_markers(self, duration):
         """
         Publishes markers to visualize the current trajectory.
+
+        Paremeters:
+        duration: how long should the markers visualization last. If this
+        function is called from a loop they last at least the loop rate.
         """
         if len(self.trajectory.poses) == 0:
             return
@@ -226,7 +264,7 @@ class TrajectoryMarkers(object):
         path.ns = "path"
         path.action = Marker.ADD
         path.type = Marker.LINE_STRIP
-        path.lifetime = rospy.Duration(1/5.)
+        path.lifetime = rospy.Duration(duration)
         path.color.r = 1
         path.color.g = 0
         path.color.b = 1
@@ -256,5 +294,5 @@ if __name__ == "__main__":
     server = TrajectoryMarkers("left")
     t = rospy.Rate(5)
     while not rospy.is_shutdown():
-        server.publish_trajectory()
+        server.publish_trajectory_markers(1./5)
         t.sleep()
