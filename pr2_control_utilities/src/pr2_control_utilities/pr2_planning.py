@@ -40,6 +40,7 @@ from arm_navigation_msgs.msg import AllowedContactSpecification
 from arm_navigation_msgs.msg import Shape
 from arm_navigation_msgs.srv import SetPlanningSceneDiff
 import tf
+import utils
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
 from actionlib_msgs.msg import GoalStatus
 
@@ -57,13 +58,15 @@ class PR2MoveArm(object):
         self.move_left_arm_client.wait_for_server()
         
         rospy.loginfo("waiting for action make_static_collision_map action server")
-        self.make_static_collision_map_client = actionlib.SimpleActionClient('make_static_collision_map', 
-                                                                             MakeStaticCollisionMapAction)
+        self.make_static_collision_map_client = actionlib.SimpleActionClient(
+                                            'make_static_collision_map', 
+                                            MakeStaticCollisionMapAction)
         self.make_static_collision_map_client.wait_for_server()
         
         rospy.loginfo("waiting for service set_planning_scene_diff")
-        self.planning_scene_client = rospy.ServiceProxy("/environment_server/set_planning_scene_diff",
-                                                        SetPlanningSceneDiff)
+        self.planning_scene_client = rospy.ServiceProxy(
+                                "/environment_server/set_planning_scene_diff",
+                                SetPlanningSceneDiff)
         self.planning_scene_client.wait_for_service()
         
         self.tf_listener = tf.TransformListener()
@@ -246,16 +249,25 @@ class PR2MoveArm(object):
         right gripper.
         """
         link_name = "r_wrist_roll_link"
-        joint_angles = self.joint_mover.robot_state.right_arm_positions
-        return self.right_ik.run_fk(joint_angles, link_name)
+        return utils.convert_to_posestamped(self.tf_listener,
+                                           (0,0,0), 
+                                           (0,0,0), 
+                                           link_name,
+                                           "/base_link", 
+                                           )
     
     def get_left_gripper_pose(self):
         """Returns a PoseStamped with the position/orientation of the
         left gripper.
         """
         link_name = "l_wrist_roll_link"
-        joint_angles = self.joint_mover.robot_state.left_arm_positions
-        return self.left_ik.run_fk(joint_angles, link_name)
+        return utils.convert_to_posestamped(self.tf_listener,
+                                           (0,0,0), 
+                                           (0,0,0),
+                                           link_name,
+                                           "/base_link", 
+                                           )
+
 
     def move_right_arm_non_collision(self, position, orientation, 
                                      frame_id,
