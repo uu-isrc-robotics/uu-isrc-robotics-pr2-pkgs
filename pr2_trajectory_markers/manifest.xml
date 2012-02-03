@@ -1,0 +1,24 @@
+<package>
+  <description brief="Interactive marker to create trajectories on the PR2">
+
+      An interactive marker to create and execute a trajectory on the PR2. It 
+      supports cartesian gripper movements using a planner or collision-free IK,
+      pointing the head to the marker, creating a trajectory and publishing it.
+      It resembles pr2_marker_control, but it is not as features rich. But it
+      supports creating and publishing (via bagrecord) trajectories.
+
+  </description>
+  <author>Lorenzo Riano &lt;lorenzo.riano@gmail.com&gt; </author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/pr2_trajectory_markers</url>
+  <depend package="interactive_markers"/>
+  <depend package="rospy"/>
+  <depend package="visualization_msgs"/>
+  <depend package="pr2_control_utilities"/>
+  <depend package="geometry_msgs"/>
+
+
+</package>
+
+
