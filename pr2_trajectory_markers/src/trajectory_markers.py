@@ -5,7 +5,7 @@ All rights reserved.
 """
 
 
-import roslib; roslib.load_manifest("markers_tests")
+import roslib; roslib.load_manifest("pr2_trajectory_markers")
 import rospy
 import pr2_control_utilities
 from pr2_control_utilities.utils import create_tuples_from_pose
@@ -30,6 +30,8 @@ class PR2TrajectoryMarkers(object):
     trajectory_poses_[whicharm] a markerarray to display the trajectory.
     trajectory_poses_[whicarm] a posesarray with the resulting pose
 
+    The class subscribes
+
     Constructor:
     TrajectoryMarkers(whicharm = "left")
     or
@@ -40,12 +42,15 @@ class PR2TrajectoryMarkers(object):
         robot_state = pr2_control_utilities.RobotState()
         self.joint_controller = pr2_control_utilities.PR2JointMover(robot_state)
         self.planner = pr2_control_utilities.PR2MoveArm(self.joint_controller)
-        self.server = InteractiveMarkerServer("trajectory_markers_" + whicharm)
+        self.server = InteractiveMarkerServer("~trajectory_markers_" + whicharm)
 
-        self.visualizer_pub = rospy.Publisher("trajectory_markers_path_" + whicharm,
+        self.visualizer_pub = rospy.Publisher("~trajectory_markers_path_" + whicharm,
                 MarkerArray)
-        self.trajectory_pub = rospy.Publisher("trajectory_poses_" + whicharm, 
+        self.trajectory_pub = rospy.Publisher("~trajectory_poses_" + whicharm, 
                 PoseArray)
+        rospy.Subscriber("~overwrite_trajectory_"+whicharm, 
+                PoseArray,
+                self.overwrite_trajectory)
         
         # create an interactive marker for our server
         int_marker = InteractiveMarker()
@@ -100,6 +105,10 @@ class PR2TrajectoryMarkers(object):
         empty
         """
         pass
+
+    def overwrite_trajectory(self, msg):
+        self.trajectory = msg
+        rospy.loginfo("New trajectory: %s", msg)
 
     def add_point(self, feedback):
         """
@@ -291,18 +300,16 @@ class PR2TrajectoryMarkers(object):
 
 if __name__ == "__main__":
     import sys    
-    rospy.init_node("pr2_trajectory_markers")
     if len(sys.argv) < 2:
-        rospy.logerr("Usage: %s [left|right]")
-        rospy.signal_shutdown("wrong arguments")
+        rospy.logerr("Usage: %s [left|right]", sys.argv[0])
         sys.exit()
     if sys.argv[1] not in ("left", "right"):
-        rospy.logerr("Usage: %s [left|right]")
-        rospy.signal_shutdown("wrong_arguments")
+        rospy.logerr("Usage: %s [left|right]", sys.argv[0])
         sys.exit()
-
-    server = PR2TrajectoryMarkers(sys.argv[1])
+    rospy.init_node("pr2_trajectory_markers_" + sys.argv[1])
+    
     t = rospy.Rate(5)
+    server =  PR2TrajectoryMarkers(sys.argv[1]) 
     while not rospy.is_shutdown():
         server.publish_trajectory_markers(1./5)
         t.sleep()
