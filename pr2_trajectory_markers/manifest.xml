@@ -8,7 +8,7 @@
       supports creating and publishing (via bagrecord) trajectories.
 
   </description>
-  <author>Lorenzo Riano &lt;lorenzo.riano@gmail.com&gt; </author>
+  <author>Lorenzo Riano lorenzo.riano@gmail.com </author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/pr2_trajectory_markers</url>
