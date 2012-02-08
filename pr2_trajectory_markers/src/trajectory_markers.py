@@ -13,6 +13,7 @@ from pr2_control_utilities.utils import create_tuples_from_pose
 from interactive_markers.interactive_marker_server import (
         InteractiveMarkerServer, InteractiveMarker,
         InteractiveMarkerControl,
+        InteractiveMarkerFeedback
         )
 from interactive_markers.menu_handler import MenuHandler
 
@@ -26,11 +27,13 @@ class PR2TrajectoryMarkers(object):
     trajectory can be published as a PoseArray message.
 
     This class published on the following topics:
-    trajectory_markers_[whicharm] are the main interactive markers.
-    trajectory_poses_[whicharm] a markerarray to display the trajectory.
-    trajectory_poses_[whicarm] a posesarray with the resulting pose
+    ~trajectory_markers_[whicharm] are the main interactive markers.
+    ~trajectory_poses_[whicharm] a markerarray to display the trajectory.
+    ~trajectory_poses_[whicarm] a posesarray with the resulting pose
 
-    The class subscribes
+    The class subscribes to the topic ~overwrite_trajectory_[whicharm]
+    to change the stored trajectory. This is useful to resume working on a 
+    trajectory after re-starting the node.
 
     Constructor:
     TrajectoryMarkers(whicharm = "left")
@@ -60,7 +63,10 @@ class PR2TrajectoryMarkers(object):
         self.server.insert(int_marker, self.main_callback)
 
         # create the main marker shape
-        utils.makeGripperMarker(int_marker)
+        #color = (1,0,0,1)
+        color = None
+        self.gripper_marker = utils.makeGripperMarker(color=color)
+        int_marker.controls.append(self.gripper_marker);
         #add the controls 
         utils.make_6DOF_marker(int_marker)
 
@@ -70,6 +76,7 @@ class PR2TrajectoryMarkers(object):
 
         self.trajectory = PoseArray()
         self.trajectory.header.frame_id = "/base_link"
+        self.last_gripper_pose = None
         rospy.loginfo("PR2TrajectoryMarkers (%s) is ready", whicharm)
 
     def create_menu(self):
@@ -102,13 +109,40 @@ class PR2TrajectoryMarkers(object):
 
     def main_callback(self, feedback):
         """
-        empty
+        If the mouse button is released change the gripper color according to 
+        the IK result. Quite awkward, trying to get a nicer way to do it.
         """
-        pass
+        if feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE:
+            self.last_gripper_pose =  feedback.pose
+        #rospy.loginfo("Updating Marker: %d", feedback.event_type)
+        #rospy.loginfo("POS: %s", feedback.pose.position)
+        if (self.last_gripper_pose and 
+                    feedback.event_type ==  InteractiveMarkerFeedback.MOUSE_UP):
+            self.last_gripper_pose = None
+            pos = PoseStamped()
+            pos.header.frame_id = feedback.header.frame_id
+            pos.pose = feedback.pose
+            if self.whicharm == "right":
+                ik = self.planner.check_ik_right_arm
+            else:
+                ik = self.planner.check_ik_left_arm
+            
+            if ik(pos):
+                color = None
+            else:
+                color = (1,0,0,1)
+
+            int_marker = self.server.get(self.int_marker.name)
+            int_marker.controls.remove(self.gripper_marker)
+            self.gripper_marker = utils.makeGripperMarker(color=color)
+            int_marker.controls.append(self.gripper_marker)
+            #rospy.loginfo("Control: %s", int_marker.controls)
+            self.server.insert(int_marker, self.main_callback)
+            self.server.setPose(int_marker.name, self.last_gripper_pose)
+            self.server.applyChanges()
 
     def overwrite_trajectory(self, msg):
         self.trajectory = msg
-        rospy.loginfo("New trajectory: %s", msg)
 
     def add_point(self, feedback):
         """
