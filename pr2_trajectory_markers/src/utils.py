@@ -155,17 +155,16 @@ def matrix4ToPose(matrix):
     return pos
 
 
-def makeGripperMarker(int_marker, angle=0.541, color=None, scale=1.0):
+def makeGripperMarker(angle=0.541, color=None, scale=1.0):
     """
-    Creates an InteractiveMarkerControl with the PR2 gripper shape. The new
-    marker is appended to the controls list of int_marker.
-
+    Creates an InteractiveMarkerControl with the PR2 gripper shape. 
     Parameters:
-    int_marker: a previously created InteractiveMarker to attach the new marker
-    to.
-    angle: boh!
+    angle: the aperture angle of the gripper (default=0.541)
     color: (r,g,b,a) tuple or None (default) if using the material colors
     scale: the scale of the gripper, default is 1.0
+
+    Returns:
+    The new gripper InteractiveMarkerControl
     """
 
     T1 = euclid.Matrix4()
@@ -228,5 +227,5 @@ def makeGripperMarker(int_marker, angle=0.541, color=None, scale=1.0):
     control.markers.append(copy.deepcopy(mesh))
 
     control.interaction_mode = InteractiveMarkerControl.BUTTON
-    int_marker.controls.append(control)
 
+    return control
