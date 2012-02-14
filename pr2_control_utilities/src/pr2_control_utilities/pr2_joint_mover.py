@@ -57,28 +57,25 @@ class PR2JointMover(object):
     This is a convenience class to control the PR2 joints. 
     The joints can be saved and loaded from a file (see the PoseSaver class in save.py
     '''
-    def __init__(self, robot_state, name=None):
+    def __init__(self, robot_state=None, name="Default", time_to_reach=5.0):
         '''
         
         @param robot_state: a RobotState instance.
         @param name: an optional name.
         '''
         
-        self.robot_state = robot_state
-        if name is None:
-            self.name = "Default"
-        else:
-            self.name = name
-        self.time_to_reach = 5.0
+        self.robot_state = robot_state if robot_state else RobotState()
+        self.name = name
+        self.time_to_reach = time_to_reach
         
-        self.r_arm_client = robot_state.r_arm_client       
-        self.l_arm_client = robot_state.l_arm_client 
-        self.r_gripper_client = robot_state.r_gripper_client         
-        self.l_gripper_client = robot_state.l_gripper_client 
-        self.head_pointer_client = robot_state.head_pointer_client
-        self.head_client = robot_state.head_client 
-        self.torso_client = robot_state.torso_client
-#        self.filter_service = robot_state.filter_service
+        self.r_arm_client = self.robot_state.r_arm_client       
+        self.l_arm_client = self.robot_state.l_arm_client 
+        self.r_gripper_client = self.robot_state.r_gripper_client         
+        self.l_gripper_client = self.robot_state.l_gripper_client 
+        self.head_pointer_client = self.robot_state.head_pointer_client
+        self.head_client = self.robot_state.head_client 
+        self.torso_client = self.robot_state.torso_client
+#        self.filter_service = self.robot_state.filter_service
                 
         self.__target_left_arm = []
         self.__target_right_arm = []
