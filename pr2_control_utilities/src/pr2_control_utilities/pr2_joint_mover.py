@@ -53,14 +53,25 @@ from pr2_controllers_msgs.msg import (JointTrajectoryAction,
 from pr2_control_utilities.robot_state import RobotState
         
 class PR2JointMover(object):
-    '''
-    This is a convenience class to control the PR2 joints. 
-    The joints can be saved and loaded from a file (see the PoseSaver class in save.py
+    '''This is a convenience class to control the PR2 joints. 
+
+    The class can be used in two ways: 
+    
+    * set_[joint_group]_state: Immediately move the joints group (e.g. arm, 
+       gripper, head, torso ..) to a particular state.
+    * Change one of the target properties and then call execute() or 
+       execute_and_wait(). In this case all the joints will be moved at the
+       same time (e.g. the two arms, the arms and the head and so on).
+    
+    The joints values can be read from the robot_state property.
+
+    The joints can be saved and loaded from a file. See parse_bookmark_file to
+    read values from a file and write_target to save.
     '''
     def __init__(self, robot_state=None, name="Default", time_to_reach=5.0):
         '''
         
-        @param robot_state: a RobotState instance.
+        @param robot_state: a RobotState instance or None for the default one.
         @param name: an optional name.
         '''
         
@@ -441,8 +452,9 @@ class PR2JointMover(object):
             self.torso_client.wait_for_result()
 
     def parse_bookmark_file(self, bfile):
-        '''
-        The file where joint positions are stored. See save.py.
+        '''Read the target joint values from a file or a string. 
+        The values are stored in the target_[...] properties. Missing
+        joints are ignored.
         
         Example format is:
         r_arm:-0.105340072857, -0.188306789361, -0.271993550558, -1.24563923099, -1.35868478783, -1.30406916379, 1.35572398144
@@ -450,8 +462,9 @@ class PR2JointMover(object):
         r_gripper: 0.037678
         l_gripper: 0.097985
         head:-0.0826166032369, 0.12723450247
-         
-        @param bfile: the string name of the file to open
+        
+        Parameters:
+        bfile: the string name of the file to open
         '''
         
         if type(bfile) is str:
@@ -588,9 +601,15 @@ class PR2JointMover(object):
                     return
         
     def write_targets(self, bfile):
-        '''
-        Write on the file the previously stored target joints
-        @param bfile: either a string or an open file object
+        '''Write a file with the previously stored target joints. 
+        Only the values in the target_[...] properties are stored. To write the 
+        current robot configuration use:
+        
+        mover.store_targets()
+        mover.write_targets("filename")
+
+        Parameters:
+        bfile: either a string or an open file object
         '''
         if type(bfile) is str:
             f = open(bfile,'w')
@@ -766,7 +785,7 @@ class PosesSet(object):
         
     def parse_bookmark_file(self, bfile):
         '''
-        Parse a file with a sequence of joints previously saved by a @PR2JointMover. 
+        Parse a file with a sequence of joints previously saved by a PR2JointMover. 
         @param bfile: either an open file or a path
         '''
         if type(bfile) is str:
