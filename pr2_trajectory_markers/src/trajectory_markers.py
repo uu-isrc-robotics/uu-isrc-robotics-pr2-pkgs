@@ -60,6 +60,7 @@ class PR2TrajectoryMarkers(object):
         int_marker.header.frame_id = "/base_link"
         int_marker.name = "move_" + whicharm + "_arm"
         int_marker.description = "Move the " + whicharm + " arm"
+        int_marker.scale = 0.2
         self.server.insert(int_marker, self.main_callback)
 
         # create the main marker shape
