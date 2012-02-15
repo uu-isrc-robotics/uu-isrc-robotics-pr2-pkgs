@@ -9,7 +9,7 @@ import tf
 import rospy
 from geometry_msgs.msg import PoseStamped 
 from geometry_msgs.msg import PointStamped
-
+import math
 
 def convert_to_posestamped(listener, pos, rot, from_frame, to_frame):
     """
@@ -110,4 +110,26 @@ def convert_point(listener, pos, from_frame, to_frame):
         
     newpose = listener.transformPoint(to_frame, zeropose)
     return newpose.point.x, newpose.point.y, newpose.point.z
+
+def normalize_trajectory(trajectory, current_angles):
+    """normalize a trajectory (list of lists of joint angles), 
+    so that the desired angles are the nearest ones for the continuous 
+    joints (5 and 7)
+    """
+    trajectory_copy = [list(angles) for angles in trajectory]
+    for angles in trajectory_copy:
+        angles[4] = normalize_angle(angles[4], current_angles[4])
+        angles[6] = normalize_angle(angles[6], current_angles[6])
+    return trajectory_copy
+
+def normalize_angle(angle, current_angle):
+    """normalize an angle for a continuous joint so that it's the closest 
+    version of the angle to the current angle (not +-2*pi)
+    """
+    while current_angle-angle > math.pi:
+        angle += 2*math.pi
+    while angle - current_angle > math.pi:
+        angle -= 2*math.pi
+    return angle
+
 

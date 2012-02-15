@@ -328,7 +328,8 @@ class PR2MoveArm(object):
         
         if normalize:
             rospy.loginfo("Normalising trajectory")
-            trajectory = self.__normalize_trajectory(trajectory, joint_angles)
+            #trajectory = self.__normalize_trajectory(trajectory, joint_angles)
+            trajectory = utils.normalize_trajectory(trajectory, joint_angles)
         else:
             rospy.loginfo("Not normalising the trajectory")
         (times, vels) = ik.trajectory_times_and_vels(trajectory, [max_vel]*7)
@@ -433,21 +434,21 @@ class PR2MoveArm(object):
     
     ##normalize a trajectory (list of lists of joint angles), so that the desired angles 
     #are the nearest ones for the continuous joints (5 and 7)
-    def __normalize_trajectory(self, trajectory, current_angles):
-        trajectory_copy = [list(angles) for angles in trajectory]
-        for angles in trajectory_copy:
-            angles[4] = self.__normalize_angle(angles[4], current_angles[4])
-            angles[6] = self.__normalize_angle(angles[6], current_angles[6])
-        return trajectory_copy
+    #def __normalize_trajectory(self, trajectory, current_angles):
+    #    trajectory_copy = [list(angles) for angles in trajectory]
+    #    for angles in trajectory_copy:
+    #        angles[4] = self.__normalize_angle(angles[4], current_angles[4])
+    #        angles[6] = self.__normalize_angle(angles[6], current_angles[6])
+    #    return trajectory_copy
 
     ##normalize an angle for a continuous joint so that it's the closest version 
     #of the angle to the current angle (not +-2*pi)
-    def __normalize_angle(self, angle, current_angle):
-        while current_angle-angle > math.pi:
-            angle += 2*math.pi
-        while angle - current_angle > math.pi:
-            angle -= 2*math.pi
-        return angle
+    #def __normalize_angle(self, angle, current_angle):
+    #    while current_angle-angle > math.pi:
+    #        angle += 2*math.pi
+    #    while angle - current_angle > math.pi:
+    #        angle -= 2*math.pi
+    #    return angle
     
     def build_collision_operations(self, object1, object2):
         msg = OrderedCollisionOperations()
