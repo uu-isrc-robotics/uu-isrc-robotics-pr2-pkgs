@@ -8,7 +8,8 @@ All rights reserved.
 import roslib; roslib.load_manifest("pr2_trajectory_markers")
 import rospy
 import pr2_control_utilities
-from pr2_control_utilities.utils import create_tuples_from_pose
+from pr2_control_utilities.utils import (create_tuples_from_pose,
+        normalize_trajectory)
 
 from interactive_markers.interactive_marker_server import (
         InteractiveMarkerServer, InteractiveMarker,
@@ -42,10 +43,11 @@ class PR2TrajectoryMarkers(object):
     """
     def __init__(self, whicharm):
         self.whicharm = whicharm
-        robot_state = pr2_control_utilities.RobotState()
-        self.joint_controller = pr2_control_utilities.PR2JointMover(robot_state)
+        self.robot_state = pr2_control_utilities.RobotState()
+        self.joint_controller = pr2_control_utilities.PR2JointMover(self.robot_state)
         self.planner = pr2_control_utilities.PR2MoveArm(self.joint_controller)
         self.server = InteractiveMarkerServer("~trajectory_markers_" + whicharm)
+        self.tf_listener = self.planner.tf_listener
 
         self.visualizer_pub = rospy.Publisher("~trajectory_markers_path_" + whicharm,
                 MarkerArray)
@@ -58,6 +60,8 @@ class PR2TrajectoryMarkers(object):
         # create an interactive marker for our server
         int_marker = InteractiveMarker()
         int_marker.header.frame_id = "/base_link"
+        int_marker.pose.position.x = 0.5
+        int_marker.pose.position.z = 1.0
         int_marker.name = "move_" + whicharm + "_arm"
         int_marker.description = "Move the " + whicharm + " arm"
         int_marker.scale = 0.2
@@ -78,6 +82,12 @@ class PR2TrajectoryMarkers(object):
         self.trajectory = PoseArray()
         self.trajectory.header.frame_id = "/base_link"
         self.last_gripper_pose = None
+
+        if whicharm == "right":
+            self.ik_utils = self.planner.right_ik
+        else:
+            self.ik_utils = self.planner.left_ik
+
         rospy.loginfo("PR2TrajectoryMarkers (%s) is ready", whicharm)
 
     def create_menu(self):
@@ -105,6 +115,8 @@ class PR2TrajectoryMarkers(object):
                 callback = self.arm_trajectory_start)
         menu_handler.insert("Update planning scene", 
                 callback = self.update_planning)
+        #menu_handler.insert("Interpolate the trajectory", 
+        #        callback = self.interpolate_poses)
 
         menu_handler.apply(self.server, self.int_marker.name)
 
@@ -175,7 +187,7 @@ class PR2TrajectoryMarkers(object):
                 gripper_pos.header)
         self.server.applyChanges()
 
-    def execute_trajectory(self, feedback):
+    def __execute_trajectory(self, feedback):
         """
         Executes the tracjectory memorized so far.
         """
@@ -190,6 +202,21 @@ class PR2TrajectoryMarkers(object):
             if not res:
                 rospy.logerr("Something went wrong when moving")
                 return
+    
+    def execute_trajectory(self, feedback):
+        """
+        Executes the tracjectory memorized so far. It interpolates between
+        the poses and creates suitable times and velocities.
+        """
+        traj = self.interpolate_poses()
+        times, vels = self.ik_utils.trajectory_times_and_vels(traj)
+        if len(vels) == 0 or len(times) == 0:
+            rospy.logerr("Something went wrong when finding the times")
+            return
+        self.joint_controller.execute_trajectory(traj, times, vels,
+                                                 self.whicharm,
+                                                 wait = True)
+
     
     def arm_trajectory_start(self, feedback):
         """
@@ -288,6 +315,50 @@ class PR2TrajectoryMarkers(object):
         Publishes the trajectory as a PoseArray message
         """
         self.trajectory_pub.publish(self.trajectory)
+
+    def interpolate_poses(self):
+        """
+        Refines the trajectory by interpolating between the joints.
+        """
+        if len(self.trajectory.poses) < 2:
+            rospy.logerr("At least two points in the trajectory are needed")
+
+        if self.whicharm == "right":
+            starting_angles = self.robot_state.right_arm_positions
+            link_name = "r_wrist_roll_link"
+        else:
+            starting_angles = self.robot_state.left_arm_positions
+            link_name = "l_wrist_roll_link"
+
+        all_trajectory = [starting_angles]
+        for i in xrange(len(self.trajectory.poses) - 1):
+            start = PoseStamped()
+            start.header = self.trajectory.header
+            start.pose = self.trajectory.poses[i]
+            
+            end = PoseStamped()
+            end.header = self.trajectory.header
+            end.pose = self.trajectory.poses[i+1]
+            
+            traj, errs = self.ik_utils.check_cartesian_path(start, end,
+                    all_trajectory[-1],
+                    #starting_angles,
+                    #pos_spacing = 0.05,
+                    collision_aware = 0,
+                    num_steps = 5,
+                    )
+            if any(e == 3 for e in errs):
+                rospy.logerr("Error while running IK, codes are: %s", errs)
+                return
+
+            filtered_traj = [t for (t,e) in zip(traj,errs) if e == 0]
+            all_trajectory.extend(filtered_traj)
+
+        all_trajectory = normalize_trajectory(all_trajectory, starting_angles)
+        rospy.loginfo("New interpolated a trajectory with %d elements", 
+                len(all_trajectory))
+         
+        return all_trajectory
 
     def publish_trajectory_markers(self, duration):
         """
