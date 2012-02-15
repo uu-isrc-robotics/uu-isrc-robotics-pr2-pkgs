@@ -21,6 +21,7 @@ from interactive_markers.menu_handler import MenuHandler
 import utils
 from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
+from std_srvs.srv import Empty
 
 class PR2TrajectoryMarkers(object):
     """
@@ -28,13 +29,16 @@ class PR2TrajectoryMarkers(object):
     trajectory can be published as a PoseArray message.
 
     This class published on the following topics:
-    ~trajectory_markers_[whicharm] are the main interactive markers.
-    ~trajectory_poses_[whicharm] a markerarray to display the trajectory.
-    ~trajectory_poses_[whicarm] a posesarray with the resulting pose
+    ~trajectory_markers are the main interactive markers.
+    ~trajectory_poses a markerarray to display the trajectory.
+    ~trajectory_poses a posesarray with the resulting pose
 
     The class subscribes to the topic ~overwrite_trajectory_[whicharm]
     to change the stored trajectory. This is useful to resume working on a 
     trajectory after re-starting the node.
+
+    A std_srvs/Empty service named ~execute_trajectory is provided to 
+    externally trigger the execution of the trajectory.
 
     Constructor:
     TrajectoryMarkers(whicharm = "left")
@@ -46,16 +50,18 @@ class PR2TrajectoryMarkers(object):
         self.robot_state = pr2_control_utilities.RobotState()
         self.joint_controller = pr2_control_utilities.PR2JointMover(self.robot_state)
         self.planner = pr2_control_utilities.PR2MoveArm(self.joint_controller)
-        self.server = InteractiveMarkerServer("~trajectory_markers_" + whicharm)
+        self.server = InteractiveMarkerServer("~trajectory_markers")
         self.tf_listener = self.planner.tf_listener
 
-        self.visualizer_pub = rospy.Publisher("~trajectory_markers_path_" + whicharm,
+        self.visualizer_pub = rospy.Publisher("~trajectory_markers_path",
                 MarkerArray)
-        self.trajectory_pub = rospy.Publisher("~trajectory_poses_" + whicharm, 
+        self.trajectory_pub = rospy.Publisher("~trajectory_poses", 
                 PoseArray)
-        rospy.Subscriber("~overwrite_trajectory_"+whicharm, 
+        rospy.Subscriber("~overwrite_trajectory", 
                 PoseArray,
                 self.overwrite_trajectory)
+        rospy.Service("~execute_trajectory", Empty, 
+                self.execute_trajectory)
         
         # create an interactive marker for our server
         int_marker = InteractiveMarker()
@@ -115,8 +121,6 @@ class PR2TrajectoryMarkers(object):
                 callback = self.arm_trajectory_start)
         menu_handler.insert("Update planning scene", 
                 callback = self.update_planning)
-        #menu_handler.insert("Interpolate the trajectory", 
-        #        callback = self.interpolate_poses)
 
         menu_handler.apply(self.server, self.int_marker.name)
 
@@ -187,22 +191,6 @@ class PR2TrajectoryMarkers(object):
                 gripper_pos.header)
         self.server.applyChanges()
 
-    def __execute_trajectory(self, feedback):
-        """
-        Executes the tracjectory memorized so far.
-        """
-        if self.whicharm == "right":
-            moveit = self.planner.move_right_arm_non_collision
-        else:
-            moveit = self.planner.move_left_arm_non_collision
-
-        for pose in self.trajectory.poses:
-            pos, quat = create_tuples_from_pose(pose)
-            res = moveit(pos, quat, self.trajectory.header.frame_id, 1.0)
-            if not res:
-                rospy.logerr("Something went wrong when moving")
-                return
-    
     def execute_trajectory(self, feedback):
         """
         Executes the tracjectory memorized so far. It interpolates between
@@ -217,7 +205,6 @@ class PR2TrajectoryMarkers(object):
                                                  self.whicharm,
                                                  wait = True)
 
-    
     def arm_trajectory_start(self, feedback):
         """
         Move the gripper to the first pose in the trajectory.
