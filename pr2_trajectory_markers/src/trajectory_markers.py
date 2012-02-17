@@ -21,7 +21,7 @@ from interactive_markers.menu_handler import MenuHandler
 import utils
 from geometry_msgs.msg import PoseArray, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty,EmptyResponse
 
 class PR2TrajectoryMarkers(object):
     """
@@ -33,9 +33,9 @@ class PR2TrajectoryMarkers(object):
     ~trajectory_poses a markerarray to display the trajectory.
     ~trajectory_poses a posesarray with the resulting pose
 
-    The class subscribes to the topic ~overwrite_trajectory_[whicharm]
+    The class subscribes to the topic ~overwrite_trajectory_
     to change the stored trajectory. This is useful to resume working on a 
-    trajectory after re-starting the node.
+    trajectory after re-starting the node. The message type is PoseArray.
 
     A std_srvs/Empty service named ~execute_trajectory is provided to 
     externally trigger the execution of the trajectory.
@@ -61,7 +61,7 @@ class PR2TrajectoryMarkers(object):
                 PoseArray,
                 self.overwrite_trajectory)
         rospy.Service("~execute_trajectory", Empty, 
-                self.execute_trajectory)
+                self.execute_trajectory_srv)
         
         # create an interactive marker for our server
         int_marker = InteractiveMarker()
@@ -196,14 +196,26 @@ class PR2TrajectoryMarkers(object):
         Executes the tracjectory memorized so far. It interpolates between
         the poses and creates suitable times and velocities.
         """
+
         traj = self.interpolate_poses()
+        if len(traj) == 0:
+            rospy.logerr("Something went wrong when interpolating")
+            return
+
         times, vels = self.ik_utils.trajectory_times_and_vels(traj)
         if len(vels) == 0 or len(times) == 0:
             rospy.logerr("Something went wrong when finding the times")
-            return
+            return 
         self.joint_controller.execute_trajectory(traj, times, vels,
                                                  self.whicharm,
                                                  wait = True)
+        return 
+
+    def execute_trajectory_srv(self, _):
+        """Same as execute_trajectory, but as a service.
+        """
+        self.execute_trajectory(None)
+        return EmptyResponse()
 
     def arm_trajectory_start(self, feedback):
         """
@@ -309,13 +321,12 @@ class PR2TrajectoryMarkers(object):
         """
         if len(self.trajectory.poses) < 2:
             rospy.logerr("At least two points in the trajectory are needed")
+            return []
 
         if self.whicharm == "right":
             starting_angles = self.robot_state.right_arm_positions
-            link_name = "r_wrist_roll_link"
         else:
             starting_angles = self.robot_state.left_arm_positions
-            link_name = "l_wrist_roll_link"
 
         all_trajectory = [starting_angles]
         for i in xrange(len(self.trajectory.poses) - 1):
@@ -336,7 +347,7 @@ class PR2TrajectoryMarkers(object):
                     )
             if any(e == 3 for e in errs):
                 rospy.logerr("Error while running IK, codes are: %s", errs)
-                return
+                return []
 
             filtered_traj = [t for (t,e) in zip(traj,errs) if e == 0]
             all_trajectory.extend(filtered_traj)
