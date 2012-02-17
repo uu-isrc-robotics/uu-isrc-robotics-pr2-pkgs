@@ -244,28 +244,34 @@ class PR2MoveArm(object):
         else:
             return False
    
-    def get_right_gripper_pose(self):
+    def get_right_gripper_pose(self, frame="/base_link"):
         """Returns a PoseStamped with the position/orientation of the
         right gripper.
+
+        Parameters:
+        frame: the frame to use for the returned PoseStamped.
         """
         link_name = "r_wrist_roll_link"
         return utils.convert_to_posestamped(self.tf_listener,
                                            (0,0,0), 
                                            (0,0,0), 
                                            link_name,
-                                           "/base_link", 
+                                           frame, 
                                            )
     
-    def get_left_gripper_pose(self):
+    def get_left_gripper_pose(self, frame = "/base_link"):
         """Returns a PoseStamped with the position/orientation of the
         left gripper.
+
+        Parameters:
+        frame: the frame to use for the returned PoseStamped.
         """
         link_name = "l_wrist_roll_link"
         return utils.convert_to_posestamped(self.tf_listener,
                                            (0,0,0), 
                                            (0,0,0),
                                            link_name,
-                                           "/base_link", 
+                                           frame, 
                                            )
 
 
