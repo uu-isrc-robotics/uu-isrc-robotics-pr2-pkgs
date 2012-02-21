@@ -82,17 +82,37 @@ class ObjectDetector(object):
             return None
         return reply
         
-    def detect_narrow(self):        
+    def detect_narrow(self):       
+        """Detects an object using the narrow stereo camera.
+        If an object is found it returns the resulting 
+        tabletop_object_detector/TabletopDetectionResponse msg,
+        None otherwise
+        """
         self.last_narrow_msg = self.__detect(self.narrow_detector)
         self.last_detection_msg = self.last_narrow_msg
         return self.last_narrow_msg
     
     def detect_wide(self):
+        """Detects an object using the wide stereo camera.
+        If an object is found it returns the resulting 
+        tabletop_object_detector/TabletopDetectionResponse msg,
+        None otherwise
+        """
         self.last_wide_msg = self.__detect(self.wide_detector)
         self.last_detection_msg = self.last_wide_msg        
         return self.last_wide_msg
     
     def find_biggest_cluster(self, clusters):
+        '''Select the biggest cluster among clusters. It uses 
+        detect_bounding_box to find the cluster position
+
+        Params:
+        clusters: a list of PointCloud among wich to find the closest 
+        cluster.
+
+        A tipical usage is to call res = detect_[narrow|wide], and then select 
+        the cluster using find_biggest_cluster(res.detection.clusters)
+        '''
         if clusters is None:
             return None
          
@@ -101,6 +121,7 @@ class ObjectDetector(object):
             return
         
         #finding the biggest cluster
+        #TODO use the builtin max function
         max_len = 0
         index = 0    
         for i,c in enumerate(clusters):
@@ -112,6 +133,15 @@ class ObjectDetector(object):
         return object_cluster
     
     def find_random_cluster(self, clusters):
+        '''Selects a random cluster. 
+        
+        Parameters:
+        clusters: a list of PointCloud among wich to find the closest 
+        cluster.
+
+        A tipical usage is to call res = detect_[narrow|wide], and then select 
+        the cluster using find_random_cluster(res.detection.clusters)
+        '''
         if clusters is None:
             return None
          
@@ -126,11 +156,15 @@ class ObjectDetector(object):
         return object_cluster
     
     def find_closest_cluster(self, clusters):
-        '''
-        Searches for the closest cluster among clusters. It uses 
+        '''Searches for the closest cluster among clusters. It uses 
         detect_bounding_box to find the cluster position
-        @param clusters: a list of PointCloud among wich to find the closest 
-        cluster 
+
+        Parameters:
+        clusters: a list of PointCloud among wich to find the closest
+        cluster.
+
+        A tipical usage is to call res = detect_[narrow|wide], and then select 
+        the cluster using find_closest_cluster(res.detection.clusters)
         '''
         if clusters is None:
             return None
@@ -185,6 +219,11 @@ class ObjectDetector(object):
         return self.last_collision_processing_msg
     
     def try_to_detect(self):
+        """Tries to detect an object using either the narrow or the wide
+        stereo. It returns the tabletop_object_detector/TabletopDetectionResponse
+        reply, or None if no object is found.
+        """
+
         rospy.loginfo("Trying the narrow stereo...")
         res_narrow = self.detect_narrow()
         if res_narrow is None:
@@ -197,6 +236,29 @@ class ObjectDetector(object):
     
     def detect_bounding_box(self, cluster = None, 
                             cluster_choser = "find_random_cluster"):
+        """Finds the bounding box of a PointCloud. If no PointCloud is
+        passed then it will use self.try_to_detect() to find an object.
+
+        The resulting FindClusterBoundingBoxResponse msg is stored in 
+        self.last_box_msg.
+
+        Example usage:
+        >> res = detector.detect_narrow()
+        #check res is not None
+        >> cluster = detector.find_biggest_cluster(res.detection.clusters)
+        #any other cluster selector is ok
+        >> box_msg = detector.detect_bounding_box(cluster)
+
+        Parameters:
+        cluster: a PointCloud msg. It can be returned by one of the detect_*
+                 methods. If none an object will be searched for.
+        cluster_choser: if cluster is None, use this choser to select when
+                        detecting. Default to find_random_cluster.
+
+        Return:
+        a FindClusterBoundingBoxResponse msg.
+        """
+
         try:
             finder = self.__getattribute__(cluster_choser)
         except AttributeError:
@@ -227,6 +289,20 @@ class ObjectDetector(object):
     
     def point_head_at(self, mover, box_msg = None, 
                       cluster_choser = "find_random_cluster"):
+        """Points the head towards an object, represented by the
+        object_manipulation_msgs/FindClusterBoundingBoxResponse msg. If box_msg
+        is None then it will invoke try_to_detect().
+
+        Parameters:
+        mover: a Pr2JointMover instance.
+        box_msg: A FindClusterBoundingBoxResponse msg, or None.
+        cluster_choser: the name of the method to use to select the cluster. 
+            Default to find_random_cluster.
+
+        Returns:
+        True if it could find the object or box_msg is not None, False otherwise.
+        """
+
         if box_msg is None:
             res = self.try_to_detect()
             if res is None:
