@@ -71,7 +71,7 @@ class LogTrajectoryResult(object):
         Searches for an object using the detector.
 
         Returns:
-        (pos, dims) where pos is aa Point (converted in the self.frame fame with
+        (pos, dims) where pos is a Pose(converted in the self.frame fame with
         the object pose if the object is found) and dims is a Vector3 specifing
         the x,y,z dimensions of the box
         
@@ -80,29 +80,19 @@ class LogTrajectoryResult(object):
             
         head_pan, head_tilt = self.joint_mover.robot_state.head_positions
         
-        res = self.detector.search_for_object(self.joint_mover,
-                trials = 5,
-                max_pan = head_pan + 0.2,
-                min_pan = head_pan - 0.2,
-                max_tilt = head_tilt + 0.1,
-                min_tilt = head_tilt - 0.1,
-                cluster_choser = "find_closest_cluster"
-                )
-
+        res = self.detector.detect_narrow() 
         if res:
             rospy.loginfo("Object found, storing its transformation in the frame %s",
                     self.frame)
-            box_pose = self.detector.last_box_msg.pose
+            cluster = self.detector.find_biggest_cluster(res.detection.clusters)
+            box_pose = self.detector.detect_bounding_box(cluster).pose
             self.tf_listener.waitForTransform(self.frame,
                     box_pose.header.frame_id,
                     rospy.Time(0),
                     rospy.Duration(1)
                     )
             pos = self.tf_listener.transformPose(self.frame, box_pose)
-            object_pose = Point(pos.pose.position.x,
-                               pos.pose.position.y,
-                               pos.pose.position.z
-                             )
+            object_pose = pos.pose
             return (object_pose, self.detector.last_box_msg.box_dims)
         else:
             return None
@@ -165,18 +155,18 @@ class LogTrajectoryResult(object):
 
         self.pub_msg.trajectory = poses
         #moving the arm away from the view
-        if self.whicharm == "right":
-            gripper_position = self.planner.get_right_gripper_pose()
-        else:
-            gripper_position = self.planner.get_left_gripper_pose()
+        #if self.whicharm == "right":
+        #    gripper_position = self.planner.get_right_gripper_pose()
+        #else:
+        #    gripper_position = self.planner.get_left_gripper_pose()
         
         self.joint_mover.set_arm_state(pre_arm_pose, self.whicharm, wait=True)
         #turning the head towards the gripper final position
-        pos = (gripper_position.pose.position.x,
-               gripper_position.pose.position.y,
-               gripper_position.pose.position.z,
-              )
-        self.joint_mover.point_head_to(pos, gripper_position.header.frame_id)
+        #pos = (gripper_position.pose.position.x,
+        #       gripper_position.pose.position.y,
+        #       gripper_position.pose.position.z,
+        #      )
+        #self.joint_mover.point_head_to(pos, gripper_position.header.frame_id)
         
         res = self.search_object() 
         if res is None:
