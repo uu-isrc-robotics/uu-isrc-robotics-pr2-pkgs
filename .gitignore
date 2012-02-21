@@ -11,7 +11,6 @@ msg_gen/
 *.pyc
 *.dox
 *.o
-_*
 .settings
 uu-controllers/dynamic_window/cmake_install.cmake
 *.pos
@@ -25,3 +24,5 @@ ignore/
 .idea/
 *ropeproject*
 *.swp
+_*
+!__init__.py
