@@ -9,15 +9,15 @@ Header header
 geometry_msgs/Vector3 pre_movement_box_dims
 
 #the object position in the base_frame, before moving
-geometry_msgs/Point pre_movement_object_pose
+geometry_msgs/Pose pre_movement_object_pose
 
 #the trajectory the end effector followed
-geometry_msgs/Pose[] trajectory
+geometry_msgs/PoseStamped[] trajectory
  
 #the object bounding box observed after the movement
 geometry_msgs/Vector3 post_movement_box_dims
 #the object position in the base_frame, after moving
-geometry_msgs/Point post_movement_object_pose
+geometry_msgs/Pose post_movement_object_pose
 
 #which arm was used for the pushing
 uint8 LEFT=0
