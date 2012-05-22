@@ -26,3 +26,5 @@ ignore/
 *.swp
 _*
 !__init__.py
+*.wpr
+*.wpu
