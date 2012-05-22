@@ -1,6 +1,6 @@
 #! /usr/bin/python
 
-PKG="tabletop_explorer"
+PKG="tabletop_action"
 
 import roslib
 roslib.load_manifest(PKG)
