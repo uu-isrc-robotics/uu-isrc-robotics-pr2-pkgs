@@ -17,13 +17,14 @@ if __name__ == "__main__":
     
     robot_state = pr2_control_utilities.RobotState()
     joint_mover = pr2_control_utilities.PR2JointMover(robot_state)
-    detector = object_detector.ObjectDetector()
+    detector = object_detector.GenericDetector()
     
+
     if not detector.search_for_object(joint_mover, trials=15,
-                                      cluster_choser="find_closest_cluster",
+                                      cluster_choser=detector.find_closest_cluster,
                                       max_pan=0.5, min_pan=-0.5,
                                       max_tilt = 1.1, min_tilt = 0.6,):
-        rospy.logerr("No object detected by the stereo")
+        rospy.logerr("No object detected")        
     else:
         rospy.loginfo("Object detected")
     

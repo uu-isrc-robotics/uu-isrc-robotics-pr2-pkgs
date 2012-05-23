@@ -376,7 +376,7 @@ class ObjectDetector(object):
         return False
             
             
-class TabletopDetector(object):
+class GenericDetector(object):
     """An interface to the tabletop detection and segmentation provided by ROS.
     """
     def __init__(self,
@@ -620,7 +620,7 @@ class TabletopDetector(object):
             return self.last_box_msg
     
     def point_head_at(self, mover, box_msg = None, 
-                      cluster_choser = "find_random_cluster"):
+                      cluster_choser = None):
         """Points the head towards an object, represented by the
         object_manipulation_msgs/FindClusterBoundingBoxResponse msg. If box_msg
         is None then it will invoke detect().
@@ -642,12 +642,11 @@ class TabletopDetector(object):
                 return False
             clusters = res.detection.clusters 
             
-            try:
-                finder = self.__getattribute__(cluster_choser)
-            except AttributeError:
-                rospy.logwarn("Cluster choser %s does not exist, using the random one" %
-                              cluster_choser)
+            if cluster_choser is None:
                 finder = self.find_random_cluster
+            else:
+                finder = cluster_choser
+                    
 
             object_cluster = finder(clusters) 
             box_msg = self.detect_bounding_box(cluster = object_cluster)
