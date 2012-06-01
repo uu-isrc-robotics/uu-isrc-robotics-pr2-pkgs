@@ -80,7 +80,7 @@ class LogTrajectoryResult(object):
             
         head_pan, head_tilt = self.joint_mover.robot_state.head_positions
         
-        res = self.detector.detect_narrow() 
+        res = self.detector.detect() 
         if res:
             rospy.loginfo("Object found, storing its transformation in the frame %s",
                     self.frame)
