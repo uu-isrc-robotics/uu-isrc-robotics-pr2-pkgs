@@ -15,17 +15,17 @@ def main():
     robot_state = pr2_control_utilities.RobotState()
     joint_mover = pr2_control_utilities.PR2JointMover(robot_state)
     planner = pr2_control_utilities.PR2MoveArm(joint_mover)
-    detector = object_detector.ObjectDetector()
+    detector = object_detector.GenericDetector()
     
-    arm = "left"
-    #arm = "right"
+    #arm = "left"
+    arm = "right"
     service_name = "/pr2_trajectory_markers_" + arm + "/execute_trajectory"
     logger = learn_actions.LogTrajectoryResult(detector, 
-                                            joint_mover,
-                                            service_name,
-                                            arm,
-                                            planner,
-                                            tf_listener = planner.tf_listener)
+                                               joint_mover,
+                                               service_name,
+                                               arm,
+                                               planner,
+                                               tf_listener = planner.tf_listener)
     raw_input("press a key to start...")
     logger.publish_object_changes()
 
