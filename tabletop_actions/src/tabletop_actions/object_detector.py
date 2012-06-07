@@ -636,7 +636,7 @@ class GenericDetector(object):
                         Default to self.find_random_cluster.
 
         Return:
-        a FindClusterBoundingBoxResponse msg.
+        a FindClusterBoundingBoxResponse msg, or None if an error occured.
         """
 
         if cluster_choser is None:
