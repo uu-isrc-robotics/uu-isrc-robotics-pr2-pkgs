@@ -5,19 +5,24 @@
 
 Header header
 
-#the object bounding box observed before the movement
-geometry_msgs/Vector3 pre_movement_box_dims
+#the objects bounding box observed before the movement
+geometry_msgs/Vector3[] pre_movement_box_dims
 
-#the object position in the base_frame, before moving
-geometry_msgs/Pose pre_movement_object_pose
+#the objects position in the base_frame, before moving
+geometry_msgs/PoseStamped[] pre_movement_object_poses
+
+string[] pre_object_names
 
 #the trajectory the end effector followed
 geometry_msgs/PoseStamped[] trajectory
- 
-#the object bounding box observed after the movement
-geometry_msgs/Vector3 post_movement_box_dims
-#the object position in the base_frame, after moving
-geometry_msgs/Pose post_movement_object_pose
+float32[] gripper_open
+
+#the objects bounding box observed after the movement
+geometry_msgs/Vector3[] post_movement_box_dims
+#the objects position in the base_frame, after moving
+geometry_msgs/PoseStamped[] post_movement_object_poses
+
+string[] post_object_names
 
 #which arm was used for the pushing
 uint8 LEFT=0

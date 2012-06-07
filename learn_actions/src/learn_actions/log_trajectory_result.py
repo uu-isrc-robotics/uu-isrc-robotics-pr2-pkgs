@@ -1,26 +1,32 @@
-import roslib 
+import roslib
 roslib.load_manifest('learn_actions')
 import rospy
 import tf
 from learn_actions.msg import ObjectTrajectoryResults
+from tabletop_object_detector.srv import TabletopDetectionResponse
+from tabletop_collision_map_processing.srv import TabletopCollisionMapProcessingResponse
 from geometry_msgs.msg import Point
 from pr2_control_utilities import utils
+from pr2_control_utilities import RobotState
 from std_srvs.srv import Empty
 import threading
 
 class LogTrajectoryResult(object):
     """
-    Searches for an object and executes a trajectory. It then published a 
-    ObjectTrajectoryResult msg.
+    First observes the scene, memorizing all the objects there. It then executes
+    a trajectory (using the trajectory service provided in the package
+    pr2_trajectory_markers), then it observes again the scene, re-memorizing the
+    objects in it.
+    The data collected is used to publish a ObjectTrajectoryResult msg.
 
     It works with the PR2TrajectoryMarkers class in the pr2_trajectory_markers
     package by invoking it execute_trajectory service.
-    
+
     Constructor paramters:
     detector: an ObjectDetector instance
     joint_mover: a Pr2JointMover instance
     trajectory_service: used to execute a trajectory (see PR2TrajectoryMarkers)
-    whicharm: "left" | "right" which arm to use. 
+    whicharm: "left" | "right" which arm to use.
     frame_to_use: a frame relative to the robot (not external)
     tf_listner: a TransformListener instance
     """
@@ -40,14 +46,15 @@ class LogTrajectoryResult(object):
         self.frame = frame_to_use
         self.planner = planner
         self.whicharm = whicharm
-   
+        self.robot_state = RobotState()
+
         self.object_pose = None
         if tf_listener is None:
             self.tf_listner = tf.TransformListener()
         else:
             self.tf_listener = tf_listener
-    
-        self.obj_changes_pub = rospy.Publisher("trajectory_effect", 
+
+        self.obj_changes_pub = rospy.Publisher("trajectory_effect",
                 ObjectTrajectoryResults)
 
         rospy.loginfo("Waiting for %s service", trajectory_service)
@@ -68,42 +75,56 @@ class LogTrajectoryResult(object):
 
     def search_object(self):
         """
-        Searches for an object using the detector.
+        Searches for objects using the detector.
 
         Returns:
-        (pos, dims) where pos is a Pose(converted in the self.frame fame with
-        the object pose if the object is found) and dims is a Vector3 specifing
-        the x,y,z dimensions of the box
-        
+        a list of (pos, dims, names) where pos is a PoseStamped(converted in the self.frame fame with
+        the object pose if the object is found), dims is a Vector3 specifing the x,y,z dimensions of
+        the box and names are the names of the objects.
+
         None if no object is found
         """
-            
-        head_pan, head_tilt = self.joint_mover.robot_state.head_positions
-        
-        res = self.detector.detect() 
-        if res:
-            rospy.loginfo("Object found, storing its transformation in the frame %s",
-                    self.frame)
-            cluster = self.detector.find_biggest_cluster(res.detection.clusters)
-            box_pose = self.detector.detect_bounding_box(cluster).pose
-            self.tf_listener.waitForTransform(self.frame,
-                    box_pose.header.frame_id,
-                    rospy.Time(0),
-                    rospy.Duration(1)
-                    )
-            pos = self.tf_listener.transformPose(self.frame, box_pose)
-            object_pose = pos.pose
-            return (object_pose, self.detector.last_box_msg.box_dims)
-        else:
+        res = self.detector.detect()
+        if not res:
             return None
 
+        coll_res = self.detector.call_collision_map_processing(res)
 
-    def __track_gripper(self, poses):
+        isinstance(coll_res, TabletopCollisionMapProcessingResponse)
+
+        rospy.loginfo("%d objects found, changing their poses into frame %s",
+                      len(coll_res.graspable_objects),self.frame)
+
+        poses = []
+        dims = []
+
+        for graspable in coll_res.graspable_objects:
+            cluster = graspable.cluster
+            box_pose = self.detector.detect_bounding_box(cluster).pose
+            self.tf_listener.waitForTransform(self.frame,
+                                              box_pose.header.frame_id,
+                                              rospy.Time(0),
+                                              rospy.Duration(1)
+                                              )
+            object_pose = self.tf_listener.transformPose(self.frame, box_pose)
+            poses.append(object_pose)
+            dims.append(self.detector.last_box_msg.box_dims)
+
+        return poses, dims, coll_res.collision_object_names
+
+
+    def __track_gripper(self, poses, grippers):
         sleeper = rospy.Rate(100)
+        if self.whicharm == "left":
+            gripper_open = lambda: self.robot_state.l_gripper_positions[0]
+        else:
+            gripper_open = lambda: self.robot_state.r_gripper_positions[0]
+
         while self.__keep_tracking:
-            pos = self.gripper_tracking_func()
+            pos = self.gripper_tracking_func(frame=self.frame)
             pos.header.stamp = rospy.Time.now()
             poses.append(pos)
+            grippers.append(gripper_open())
             sleeper.sleep()
 
 
@@ -114,16 +135,15 @@ class LogTrajectoryResult(object):
         it published a ObjectTrajectoryResult msg with the pre position of the
         object, the post position and the trajectory itself.
         """
-        
-        res = self.search_object() 
+        res = self.search_object()
         if res is None:
             rospy.logerr("No object found!")
             return
-        self.detector.draw_bounding_box(0, self.detector.last_box_msg)
-        
-        pos, dims = res
-        self.pub_msg.pre_movement_object_pose = pos
-        self.pub_msg.pre_movement_box_dims = dims
+
+        poses, dims, names = res
+        self.pub_msg.pre_movement_object_poses =[p for p in poses]
+        self.pub_msg.pre_movement_box_dims = [d for d in dims]
+        self.pub_msg.pre_object_names = names
 
         if self.whicharm == "right":
             pre_arm_pose = self.joint_mover.robot_state.right_arm_positions
@@ -133,7 +153,8 @@ class LogTrajectoryResult(object):
 
         #preparing to start the tracking thread
         poses = []
-        t = threading.Thread(target = self.__track_gripper, args = (poses,))
+        grippers = []
+        t = threading.Thread(target = self.__track_gripper, args = (poses,grippers))
         self.__keep_tracking = True
         error_occurred = False
         t.start()
@@ -143,7 +164,6 @@ class LogTrajectoryResult(object):
         except:
             rospy.logerr("Error while communicating with the trajectory service")
             error_occurred = True
-            raise
         finally:
             self.__keep_tracking = False
             t.join()
@@ -154,12 +174,13 @@ class LogTrajectoryResult(object):
             return
 
         self.pub_msg.trajectory = poses
+        self.pub_msg.gripper_open = grippers
         #moving the arm away from the view
         #if self.whicharm == "right":
         #    gripper_position = self.planner.get_right_gripper_pose()
         #else:
         #    gripper_position = self.planner.get_left_gripper_pose()
-        
+
         self.joint_mover.set_arm_state(pre_arm_pose, self.whicharm, wait=True)
         #turning the head towards the gripper final position
         #pos = (gripper_position.pose.position.x,
@@ -167,19 +188,19 @@ class LogTrajectoryResult(object):
         #       gripper_position.pose.position.z,
         #      )
         #self.joint_mover.point_head_to(pos, gripper_position.header.frame_id)
-        
-        res = self.search_object() 
+
+        res = self.search_object()
         if res is None:
             rospy.logerr("No object found!")
             return
-        self.detector.draw_bounding_box(1, self.detector.last_box_msg)
-        
-        pos, dims = res
-        self.pub_msg.post_movement_object_pose = pos
-        self.pub_msg.post_movement_box_dims = dims
+
+        poses, dims, names = res
+        self.pub_msg.post_movement_object_poses =[p for p in poses]
+        self.pub_msg.post_movement_box_dims = [d for d in dims]
+        self.pub_msg.post_object_names = names
 
         self.obj_changes_pub.publish(self.pub_msg)
         #rospy.loginfo("Message is: %s", self.pub_msg)
-        rospy.loginfo("Elements in the trajectory: %d", 
+        rospy.loginfo("Number of elements in the trajectory: %d",
                 len(self.pub_msg.trajectory))
-                
+
