@@ -11,7 +11,7 @@ import random
 def main():
     rospy.init_node("show_boxes", anonymous=True)
     detector = GenericDetector(tabletop_segmentation="find_table")
-    res = detector.segment_only()
+    res = detector.segment_only().detection
     if res is None:
         rospy.logerr("No object found!")
         return

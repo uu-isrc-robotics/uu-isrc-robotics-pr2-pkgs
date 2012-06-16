@@ -2,9 +2,10 @@
 import rospy
 
 from object_manipulation_msgs.srv import FindClusterBoundingBox, FindClusterBoundingBoxRequest
-from tabletop_object_detector.srv import TabletopDetection, TabletopDetectionRequest
+from tabletop_object_detector.srv import TabletopDetection, TabletopDetectionRequest, TabletopDetectionResponse
 from tabletop_object_detector.srv import TabletopSegmentation, TabletopSegmentationResponse
 from tabletop_collision_map_processing.srv import TabletopCollisionMapProcessing, TabletopCollisionMapProcessingRequest
+from household_objects_database_msgs.msg import DatabaseModelPoseList
 
 import random
 from rospy.service import ServiceException
@@ -404,10 +405,10 @@ class GenericDetector(object):
         if tabletop_segmentation != None:
             rospy.loginfo("Waiting for segmentation service %s to come up", tabletop_segmentation)
             rospy.wait_for_service(tabletop_segmentation)
-            self.segment_only = rospy.ServiceProxy(tabletop_segmentation,
+            self.segment_only_srv = rospy.ServiceProxy(tabletop_segmentation,
                                                    TabletopSegmentation)
         else:
-            self.segment_only = None
+            self.segment_only_srv = None
 
 
         self.box_drawer = rospy.Publisher("box_drawer",
@@ -416,6 +417,7 @@ class GenericDetector(object):
         self.last_detection_msg = None
         self.last_box_msg = None
         self.last_collision_processing_msg = None
+        self.last_segmentation_msg = None
 
         rospy.loginfo("TabletopDetector is ready")
 
@@ -464,20 +466,30 @@ class GenericDetector(object):
         that no object recognition is performed.
 
         Returns None if no service is specified or if no object is segmented,
-        a TabletopSegmentationResponse otherwise.
+        a tabletop_object_detector/TabletopDetectionResponse otherwise.
         """
-        if self.segment_only is None:
+        if self.segment_only_srv is None:
             rospy.logerr("No segmentation service specified!")
             return None
 
-        res = self.segment_only()
+        res = self.segment_only_srv()
         isinstance(res, TabletopSegmentationResponse)
         if res.result != res.SUCCESS:
             rospy.logwarn("Segmentation did not work, error is %d", res.result)
             return None
 
         self.last_segmentation_msg = res
-        return res
+
+        detection_msg = TabletopDetectionResponse()
+        num_objects = len(res.clusters)
+        detection_msg.detection.table = res.table
+        detection_msg.detection.clusters = res.clusters
+        detection_msg.detection.result = res.SUCCESS
+        detection_msg.detection.models = [DatabaseModelPoseList() for i in range(num_objects)]
+        detection_msg.detection.cluster_model_indices = range(num_objects)
+        self.last_detection_msg = detection_msg
+
+        return detection_msg
 
     def find_biggest_cluster(self, clusters):
         '''Select the biggest cluster among clusters. It uses
