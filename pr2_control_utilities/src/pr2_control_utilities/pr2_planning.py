@@ -26,7 +26,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Author: Lorenzo Riano <lorenzo.riano@gmail.com> 
+# Author: Lorenzo Riano <lorenzo.riano@gmail.com>
 
 import roslib
 roslib.load_manifest("pr2_control_utilities")
@@ -39,56 +39,66 @@ from arm_navigation_msgs.msg import OrderedCollisionOperations, CollisionOperati
 from arm_navigation_msgs.msg import AllowedContactSpecification
 from arm_navigation_msgs.msg import Shape
 from arm_navigation_msgs.srv import SetPlanningSceneDiff
+from geometry_msgs.msg import PoseStamped
 import tf
 import utils
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
 from actionlib_msgs.msg import GoalStatus
+from pr2_control_utilities.pr2_joint_mover import PR2JointMover
+
 
 import pr2_control_utilities
 import math
+import random
+import numpy as np
 
 
 class PR2MoveArm(object):
-    def __init__(self, joint_mover):
-        rospy.loginfo("Waiting for the move_arm actions")                
+    def __init__(self, joint_mover = None):
+        if joint_mover is None:
+            self.joint_mover = PR2JointMover()
+        else:
+            self.joint_mover = joint_mover
+
+        rospy.loginfo("Waiting for the move_arm actions")
         self.move_right_arm_client = SimpleActionClient("move_right_arm", MoveArmAction)
         self.move_right_arm_client.wait_for_server()
-        
+
         self.move_left_arm_client = SimpleActionClient("move_left_arm", MoveArmAction)
         self.move_left_arm_client.wait_for_server()
-        
+
         rospy.loginfo("waiting for action make_static_collision_map action server")
         self.make_static_collision_map_client = actionlib.SimpleActionClient(
-                                            'make_static_collision_map', 
+                                            'make_static_collision_map',
                                             MakeStaticCollisionMapAction)
         self.make_static_collision_map_client.wait_for_server()
-        
+
         rospy.loginfo("waiting for service set_planning_scene_diff")
         self.planning_scene_client = rospy.ServiceProxy(
                                 "/environment_server/set_planning_scene_diff",
                                 SetPlanningSceneDiff)
         self.planning_scene_client.wait_for_service()
-        
+
         self.tf_listener = tf.TransformListener()
-        self.right_ik = pr2_control_utilities.IKUtilities("right", 
+        self.right_ik = pr2_control_utilities.IKUtilities("right",
                                                           tf_listener=self.tf_listener)
-        self.left_ik = pr2_control_utilities.IKUtilities("left", 
+        self.left_ik = pr2_control_utilities.IKUtilities("left",
                                                          tf_listener=self.tf_listener)
-        self.joint_mover = joint_mover
-        
+
+
         rospy.loginfo("%s is ready", self.__class__.__name__)
-        
-    def __move_arm(self, arm, position, orientation, frame_id,  waiting_time, 
+
+    def __move_arm(self, arm, position, orientation, frame_id,  waiting_time,
                    ordered_collision_operations = None,
                    allowed_contacts = None):
-        
+
         goal = MoveArmGoal()
         goal.motion_plan_request.group_name = arm
         goal.motion_plan_request.num_planning_attempts = 2
         goal.motion_plan_request.planner_id = ""
         goal.planner_service_name = "ompl_planning/plan_kinematic_path"
         goal.motion_plan_request.allowed_planning_time = rospy.Duration(waiting_time/2.)
-        
+
         position_constraint = PositionConstraint()
         position_constraint.header.frame_id = frame_id
         if arm == "right_arm":
@@ -100,22 +110,22 @@ class PR2MoveArm(object):
         else:
             rospy.logerr("Unknown arm: %s"%arm)
             return False
-            
+
         position_constraint.link_name = link_name
-        
+
         position_constraint.position.x = position[0]
         position_constraint.position.y = position[1]
         position_constraint.position.z = position[2]
         position_constraint.constraint_region_shape.type = position_constraint.constraint_region_shape.BOX
         tolerance = 2 * 0.02
         position_constraint.constraint_region_shape.dimensions = [tolerance, tolerance, tolerance]
-        
+
         position_constraint.constraint_region_orientation.x = 0.
         position_constraint.constraint_region_orientation.y = 0.
         position_constraint.constraint_region_orientation.z = 0.
-        position_constraint.constraint_region_orientation.w = 1.        
+        position_constraint.constraint_region_orientation.w = 1.
         position_constraint.weight = 1.0
-        
+
         orientation_constraint = OrientationConstraint()
         orientation_constraint.header.frame_id = frame_id
         orientation_constraint.link_name = link_name
@@ -124,15 +134,15 @@ class PR2MoveArm(object):
         orientation_constraint.orientation.y = orientation[1]
         orientation_constraint.orientation.z = orientation[2]
         orientation_constraint.orientation.w = orientation[3]
-        
+
         orientation_constraint.absolute_roll_tolerance = 0.04
         orientation_constraint.absolute_pitch_tolerance = 0.04
         orientation_constraint.absolute_yaw_tolerance = 0.04
         orientation_constraint.weight = 1.0
-        
+
         goal.motion_plan_request.goal_constraints.position_constraints.append(position_constraint)
         goal.motion_plan_request.goal_constraints.orientation_constraints.append(orientation_constraint)
-        
+
         if ordered_collision_operations is not None:
             rospy.loginfo("Adding ordered collisions")
             goal.operations = ordered_collision_operations
@@ -140,47 +150,47 @@ class PR2MoveArm(object):
             rospy.loginfo("Adding allowed_contacts")
             goal.planning_scene_diff.allowed_contacts = allowed_contacts
         goal.disable_collision_monitoring = False
-        
+
         state = client.send_goal_and_wait(goal, rospy.Duration(waiting_time))
         if state == actionlib.GoalStatus.SUCCEEDED:
             return True
         else:
             return False
-    
+
     def update_planning_scene(self):
         self.planning_scene_client.call()
-    
-    def move_right_arm(self, position, orientation, frame_id,  waiting_time, 
+
+    def move_right_arm(self, position, orientation, frame_id,  waiting_time,
                        ordered_collision_operations = None,
                        allowed_contacts = None):
-        return self.__move_arm("right_arm", 
-                               position, 
-                               orientation, 
-                               frame_id, 
-                               waiting_time, 
-                               ordered_collision_operations, 
+        return self.__move_arm("right_arm",
+                               position,
+                               orientation,
+                               frame_id,
+                               waiting_time,
+                               ordered_collision_operations,
                                allowed_contacts)
-    def move_left_arm(self, position, orientation, frame_id,  waiting_time, 
+    def move_left_arm(self, position, orientation, frame_id,  waiting_time,
                        ordered_collision_operations = None,
                        allowed_contacts = None):
-        return self.__move_arm("left_arm", 
-                               position, 
-                               orientation, 
-                               frame_id, 
-                               waiting_time, 
-                               ordered_collision_operations, 
+        return self.__move_arm("left_arm",
+                               position,
+                               orientation,
+                               frame_id,
+                               waiting_time,
+                               ordered_collision_operations,
                                allowed_contacts)
-        
-   
+
+
     def __check_ik_feasible(self, arm, pose_stamped):
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.right_arm_positions
-            ik = self.right_ik 
+            ik = self.right_ik
         elif arm == "left_arm":
             link_name = "l_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.left_arm_positions
-            ik = self.left_ik 
+            ik = self.left_ik
         else:
             rospy.logerr("Unknown arm: %s"%arm)
             return False
@@ -211,31 +221,33 @@ class PR2MoveArm(object):
         """
         return self.__check_ik_feasible("left_arm", pose_stamped)
 
-    def __move_arm_non_collision(self, arm, position, orientation, frame_id,
-                                 time_required):
-        
+    def __move_arm_with_ik(self, arm, position, orientation, frame_id,
+                                 time_required,
+                                 collision_aware = 0):
+
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.right_arm_positions
             mover_arm = "right"
-            ik = self.right_ik 
+            ik = self.right_ik
         elif arm == "left_arm":
             link_name = "l_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.left_arm_positions
             mover_arm = "left"
-            ik = self.left_ik 
+            ik = self.left_ik
         else:
             rospy.logerr("Unknown arm: %s"%arm)
             return False
-        
-        end_pose = ik.lists_to_pose_stamped(position, 
-                                                 orientation, 
-                                                 frame_id, 
-                                                 frame_id)
-        
-        joints, _ = ik.run_ik(end_pose, joint_angles, link_name, 
-                                 collision_aware=0) 
-        if joints is not None:
+
+        end_pose = ik.lists_to_pose_stamped(position,
+                                            orientation,
+                                            frame_id,
+                                            frame_id)
+
+        joints, _ = ik.run_ik(end_pose, joint_angles, link_name,
+                                 collision_aware=collision_aware)
+
+        if joints is not None and len(joints) != 0:
             old_time = self.joint_mover.time_to_reach
             self.joint_mover.time_to_reach = time_required
             self.joint_mover.set_arm_state(joints, mover_arm, wait=True)
@@ -243,7 +255,7 @@ class PR2MoveArm(object):
             return True
         else:
             return False
-   
+
     def get_right_gripper_pose(self, frame="/base_link"):
         """Returns a PoseStamped with the position/orientation of the
         right gripper.
@@ -253,12 +265,12 @@ class PR2MoveArm(object):
         """
         link_name = "r_wrist_roll_link"
         return utils.convert_to_posestamped(self.tf_listener,
-                                           (0,0,0), 
-                                           (0,0,0), 
+                                           (0,0,0),
+                                           (0,0,0),
                                            link_name,
-                                           frame, 
+                                           frame,
                                            )
-    
+
     def get_left_gripper_pose(self, frame = "/base_link"):
         """Returns a PoseStamped with the position/orientation of the
         left gripper.
@@ -268,70 +280,93 @@ class PR2MoveArm(object):
         """
         link_name = "l_wrist_roll_link"
         return utils.convert_to_posestamped(self.tf_listener,
-                                           (0,0,0), 
+                                           (0,0,0),
                                            (0,0,0),
                                            link_name,
-                                           frame, 
+                                           frame,
                                            )
 
 
-    def move_right_arm_non_collision(self, position, orientation, 
+    def move_right_arm_non_collision(self, position, orientation,
                                      frame_id,
                                      time_required = 1.0,
                                      ):
-        return self.__move_arm_non_collision("right_arm", 
-                                             position, 
-                                             orientation, 
-                                             frame_id,
-                                             time_required)        
-
-    def move_left_arm_non_collision(self, position, orientation, 
-                                     frame_id,
-                                     time_required = 1.0,
-                                     ):
-        return self.__move_arm_non_collision("left_arm", 
-                                              position, 
-                                             orientation, 
+        return self.__move_arm_with_ik("right_arm",
+                                             position,
+                                             orientation,
                                              frame_id,
                                              time_required)
-    
+
+    def move_left_arm_non_collision(self, position, orientation,
+                                     frame_id,
+                                     time_required = 1.0,
+                                     ):
+        return self.__move_arm_with_ik("left_arm",
+                                              position,
+                                             orientation,
+                                             frame_id,
+                                             time_required)
+
+    def move_right_arm_with_ik(self, position, orientation,
+                                     frame_id,
+                                     time_required = 1.0,
+                                     ):
+        return self.__move_arm_with_ik("right_arm",
+                                             position,
+                                             orientation,
+                                             frame_id,
+                                             time_required,
+                                             collision_aware=1)
+
+    def move_left_arm_with_ik(self, position, orientation,
+                                     frame_id,
+                                     time_required = 1.0,
+                                     ):
+        return self.__move_arm_with_ik("left_arm",
+                                              position,
+                                             orientation,
+                                             frame_id,
+                                             time_required,
+                                             collision_aware=1)
+
+
     def __create_trjectory_non_collision(self,
                                          arm,
-                                         positions, 
-                                         orientations, 
+                                         positions,
+                                         orientations,
                                          frame_id,
-                                         max_vel, 
+                                         max_vel,
                                          ignore_errors = False,
                                          normalize = True):
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.right_arm_positions
-            ik = self.right_ik 
+            ik = self.right_ik
         elif arm == "left_arm":
             link_name = "l_wrist_roll_link"
             joint_angles = self.joint_mover.robot_state.left_arm_positions
-            ik = self.left_ik 
+            ik = self.left_ik
         else:
             rospy.logerr("Unknown arm: %s"%arm)
             return False
-        
+
         trajectory = []
         for i in xrange(len(positions)):
-            
-            pose = ik.lists_to_pose_stamped(positions[i], 
-                                            orientations[i], 
-                                            frame_id, 
+
+            pose = ik.lists_to_pose_stamped(positions[i],
+                                            orientations[i],
+                                            frame_id,
                                             frame_id)
-            
+
             (joints,e) = ik.run_ik(pose, joint_angles,
-                                   link_name, collision_aware=0) 
-            
+                                   link_name, collision_aware=0)
+
             if (not ignore_errors) and (e != "SUCCESS"):
                 rospy.logerr("IK returns error codes: %s at step %d"%(str(e),i))
                 return False
             if e == "SUCCESS":
                 trajectory.append(joints)
-        
+
         if normalize:
             rospy.loginfo("Normalising trajectory")
             #trajectory = self.__normalize_trajectory(trajectory, joint_angles)
@@ -340,105 +375,105 @@ class PR2MoveArm(object):
             rospy.loginfo("Not normalising the trajectory")
         (times, vels) = ik.trajectory_times_and_vels(trajectory, [max_vel]*7)
         return (trajectory, times, vels)
-    
+
     def create_right_arm_trjectory_non_collision(self,
-                                                 positions, 
-                                                 orientations, 
+                                                 positions,
+                                                 orientations,
                                                  frame_id,
-                                                 max_vel, 
+                                                 max_vel,
                                                  ignore_errors = False,
                                                  normalize = True
                                                  ):
-        return self.__create_trjectory_non_collision("right_arm", 
-                                                     positions, 
-                                                     orientations, 
-                                                     frame_id, 
-                                                     max_vel, 
+        return self.__create_trjectory_non_collision("right_arm",
+                                                     positions,
+                                                     orientations,
+                                                     frame_id,
+                                                     max_vel,
                                                      ignore_errors,
                                                      normalize)
-    
+
     def create_left_arm_trjectory_non_collision(self,
-                                                positions, 
-                                                orientations, 
+                                                positions,
+                                                orientations,
                                                 frame_id,
-                                                max_vel, 
+                                                max_vel,
                                                 ignore_errors = False,
                                                 normalize = True
                                                 ):
-        return self.__create_trjectory_non_collision("left_arm", 
-                                                     positions, 
-                                                     orientations, 
-                                                     frame_id, 
-                                                     max_vel, 
+        return self.__create_trjectory_non_collision("left_arm",
+                                                     positions,
+                                                     orientations,
+                                                     frame_id,
+                                                     max_vel,
                                                      ignore_errors,
                                                      normalize)
-    
-    
+
+
     def __move_arm_trajectory_non_collision(self,
                                             arm,
-                                            positions, 
-                                            orientations, 
+                                            positions,
+                                            orientations,
                                             frame_id,
-                                            max_vel, 
+                                            max_vel,
                                             ignore_errors = False,
-                                            normalize = True):        
-        
+                                            normalize = True):
+
         if arm == "right_arm":
             mover_arm = "right"
         elif arm == "left_arm":
-            mover_arm = "left" 
+            mover_arm = "left"
         else:
             rospy.logerr("Unknown arm: %s"%arm)
             return False
-        
-        res = self.__create_trjectory_non_collision(arm, 
-                                                    positions, 
-                                                    orientations, 
-                                                    frame_id, 
-                                                    max_vel, 
+
+        res = self.__create_trjectory_non_collision(arm,
+                                                    positions,
+                                                    orientations,
+                                                    frame_id,
+                                                    max_vel,
                                                     ignore_errors,
                                                     normalize)
-        
+
         if res:
-            trajectory, times, vels = res 
-        
+            trajectory, times, vels = res
+
         self.joint_mover.execute_trajectory(trajectory, times, vels, mover_arm, True)
         return True
-    
-    def move_right_arm_trajectory_non_collision(self, 
-                                                positions, 
-                                                orientations, 
+
+    def move_right_arm_trajectory_non_collision(self,
+                                                positions,
+                                                orientations,
                                                 frame_id,
-                                                max_vel, 
+                                                max_vel,
                                                 ignore_errors = False,
                                                 normalize = True
                                                 ):
-        return self.__move_arm_trajectory_non_collision("right_arm", 
-                                                 positions, 
-                                                 orientations, 
-                                                 frame_id, 
-                                                 max_vel, 
+        return self.__move_arm_trajectory_non_collision("right_arm",
+                                                 positions,
+                                                 orientations,
+                                                 frame_id,
+                                                 max_vel,
                                                  ignore_errors,
                                                  normalize)
-    
-    def move_left_arm_trajectory_non_collision(self, 
-                                                positions, 
-                                                orientations, 
+
+    def move_left_arm_trajectory_non_collision(self,
+                                                positions,
+                                                orientations,
                                                 frame_id,
-                                                max_vel, 
+                                                max_vel,
                                                 ignore_errors = False,
                                                 normalize = True,
                                                 ):
-        return self.__move_arm_trajectory_non_collision("left_arm", 
-                                                 positions, 
-                                                 orientations, 
-                                                 frame_id, 
-                                                 max_vel, 
+        return self.__move_arm_trajectory_non_collision("left_arm",
+                                                 positions,
+                                                 orientations,
+                                                 frame_id,
+                                                 max_vel,
                                                  ignore_errors,
                                                  normalize)
-    
-    
-    ##normalize a trajectory (list of lists of joint angles), so that the desired angles 
+
+
+    ##normalize a trajectory (list of lists of joint angles), so that the desired angles
     #are the nearest ones for the continuous joints (5 and 7)
     #def __normalize_trajectory(self, trajectory, current_angles):
     #    trajectory_copy = [list(angles) for angles in trajectory]
@@ -447,7 +482,7 @@ class PR2MoveArm(object):
     #        angles[6] = self.__normalize_angle(angles[6], current_angles[6])
     #    return trajectory_copy
 
-    ##normalize an angle for a continuous joint so that it's the closest version 
+    ##normalize an angle for a continuous joint so that it's the closest version
     #of the angle to the current angle (not +-2*pi)
     #def __normalize_angle(self, angle, current_angle):
     #    while current_angle-angle > math.pi:
@@ -455,39 +490,39 @@ class PR2MoveArm(object):
     #    while angle - current_angle > math.pi:
     #        angle -= 2*math.pi
     #    return angle
-    
+
     def build_collision_operations(self, object1, object2):
         msg = OrderedCollisionOperations()
         collision = CollisionOperation()
-        
+
         collision.operation = CollisionOperation.DISABLE
         collision.object1 = object1
         collision.object2 = object2
         msg.collision_operations.append(collision)
         return msg
-    
+
     def build_allowed_contact_specification(self, box_pose, box_dimensions):
         msg = AllowedContactSpecification()
         msg.name = "grasping_object_region"
         shape = Shape()
-        shape.type = shape.BOX        
+        shape.type = shape.BOX
         shape.dimensions = box_dimensions
-        
+
         msg.shape = shape
         msg.pose_stamped = box_pose
-        
+
         msg.link_names = ["r_gripper_palm_link",
-                          "r_gripper_l_finger_link", 
+                          "r_gripper_l_finger_link",
                           "r_gripper_r_finger_link",
                           "r_gripper_l_finger_tip_link",
                           "r_gripper_r_finger_tip_link",
                           "l_gripper_palm_link",
-                          "l_gripper_l_finger_link", 
+                          "l_gripper_l_finger_link",
                           "l_gripper_r_finger_link",
                           "l_gripper_l_finger_tip_link",
                           "l_gripper_r_finger_tip_link"]
         return msg
-    
+
     def take_static_map(self):
         rospy.loginfo("Taking a static collision map")
         static_map_goal = MakeStaticCollisionMapGoal()
@@ -505,18 +540,75 @@ class PR2MoveArm(object):
         else:
             rospy.loginfo("some other non-success state was reached for static collision map.  Proceed with caution.")
             return 0
-    
+
+    def point_right_gripper_at(self, target,
+                               diff_x = 0.2,
+                               diff_y = 0.2,
+                               diff_z = 0.3,
+                               num_trials = 100):
+        """
+
+        Parameters:
+        target: a PoseStamped
+        """
+
+        assert isinstance(target, PoseStamped)
+
+        if target.header.frame_id != "/base_link":
+            self.tf_listener.waitForTransform("/base_link", target.header.frame_id,
+                                              rospy.Time.now(), rospy.Duration(1))
+            target = self.tf_listener.transformPose("/base_link", target)
+
+        tx = target.pose.position.x
+        ty = target.pose.position.y
+        tz = target.pose.position.z
+
+        current_trial = 0
+        while current_trial < num_trials:
+            gripper_x = random.uniform(tx-diff_x, tx)
+            gripper_y = random.uniform(ty - diff_y, ty + diff_y)
+            gripper_z = random.uniform(tz, tz + diff_z)
+
+
+            gripper_pose = (gripper_x, gripper_y, gripper_z)
+
+            vec = (-gripper_x + tx,
+                   -gripper_y + ty,
+                   -gripper_z + tz,
+                   )
+
+            rot_mat = utils.make_orth_basis(vec)
+            M = np.identity(4)
+            M[:3, :3] = rot_mat
+            gripper_orientation = tf.transformations.quaternion_from_matrix(M)
+
+            #rospy.loginfo("Trying pose: %s, orientation: %s",
+                          #gripper_pose, gripper_orientation)
+
+            if self.move_right_arm_with_ik(gripper_pose,
+                                           gripper_orientation,
+                                           "base_link",
+                                           5):
+                rospy.loginfo("Pointing was successful")
+                return True
+
+            current_trial += 1
+
+        return False
+
+
+
 if __name__ == "__main__":
     rospy.init_node('trytest', anonymous=True)
     move_arm = PR2MoveArm()
-    
+
     position = (0.55 - 0.1, -0.188, 0)
     orientation = (0., 0., 0., 1.)
-    
+
     if move_arm.move_right_arm(position, orientation, "/torso_lift_link", 120.):
         rospy.loginfo("OK")
     else:
         rospy.loginfo("bad")
-            
-        
-        
+
+
+
