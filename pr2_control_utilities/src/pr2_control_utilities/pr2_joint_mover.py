@@ -838,18 +838,38 @@ def test_singleton():
 
 if __name__ == "__main__":
     import sys
-
-    rospy.init_node('trytest', anonymous=True)
-    if len(sys.argv) < 2:
-        rospy.logerr("please specify the file to open")
+    from optparse import OptionParser
+    
+    parser = OptionParser()
+    parser.add_option("-l", "--load_file", dest="load_file",
+                      help="Load a POS file", type="string",
+                      action="store", default = None)
+    parser.add_option("-s", "--save_file", dest="save_file",
+                      help="save a POS file", type="string",
+                      action="store", default = None)    
+    (options, _) = parser.parse_args()
+    
+    if options.load_file is None and options.save_file is None:    
+        import cStringIO        
+        msg = cStringIO.StringIO()
+        parser.print_help(msg)        
+        rospy.logerr("please specify at least a load or a save action.\n%s", msg.getvalue())
         rospy.signal_shutdown()
         sys.exit()
-   
-    poses = PosesSet()
-    with open(sys.argv[1]) as f:
-        poses.parse_bookmark_file(f)
-        poses.exec_all()
-
+    
+    rospy.init_node('pr2_joint_loader', anonymous=True)
+    mover = PR2JointMover()
+    
+    if options.load_file is not None:
+        rospy.loginfo("Loading %s", options.load_file)
+        with open(options.load_file) as f:
+            mover.parse_bookmark_file(f)
+            mover.execute_and_wait()
+    elif options.save_file is not None:
+        rospy.loginfo("Saving to %s", options.save_file)
+        mover.store_targets()
+        mover.write_targets(options.save_file)
+        
 
     rospy.loginfo("Done")
     
