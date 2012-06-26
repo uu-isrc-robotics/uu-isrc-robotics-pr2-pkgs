@@ -182,6 +182,26 @@ class PR2MoveArm(object):
                                allowed_contacts)
 
 
+    def find_best_arm(self, pose):
+        """Given a PoseStamped, returns the best arm with which to reach that pose.
+        So far it is just a simple euristic.
+
+        Parameters:
+        pose: a PoseStamped
+
+        Returns:
+        either left_arm or right_arm
+        """
+        assert isinstance(pose, PoseStamped)
+        self.tf_listener.waitForTransform("base_link", pose.header.frame_id,
+                                          rospy.Time.now(), rospy.Duration(1))
+        newpose = self.tf_listener.transformPose("base_link", pose)
+        if newpose.pose.position.y > 0:
+            return "left_arm"
+        else:
+            return "right_arm"
+
+
     def __check_ik_feasible(self, arm, pose_stamped):
         if arm == "right_arm":
             link_name = "r_wrist_roll_link"
@@ -541,15 +561,17 @@ class PR2MoveArm(object):
             rospy.loginfo("some other non-success state was reached for static collision map.  Proceed with caution.")
             return 0
 
-    def point_right_gripper_at(self, target,
-                               diff_x = 0.2,
-                               diff_y = 0.2,
-                               diff_z = 0.3,
-                               num_trials = 100):
+    def point_gripper_at(self, which_arm,
+                         target,
+                         diff_x = 0.2,
+                         diff_y = 0.2,
+                         diff_z = 0.3,
+                         num_trials = 100):
         """
 
         Parameters:
         target: a PoseStamped
+        which_arm: either left_arm or right_arm
         """
 
         assert isinstance(target, PoseStamped)
@@ -564,6 +586,11 @@ class PR2MoveArm(object):
         tz = target.pose.position.z
 
         current_trial = 0
+        if which_arm == "right_arm":
+            ik_mover = self.move_right_arm_with_ik
+        else:
+            ik_mover = self.move_left_arm_with_ik
+
         while current_trial < num_trials:
             gripper_x = random.uniform(tx-diff_x, tx)
             gripper_y = random.uniform(ty - diff_y, ty + diff_y)
@@ -585,16 +612,54 @@ class PR2MoveArm(object):
             #rospy.loginfo("Trying pose: %s, orientation: %s",
                           #gripper_pose, gripper_orientation)
 
-            if self.move_right_arm_with_ik(gripper_pose,
-                                           gripper_orientation,
-                                           "base_link",
-                                           5):
+            if ik_mover(gripper_pose,
+                        gripper_orientation,
+                        "base_link",
+                        5):
                 rospy.loginfo("Pointing was successful")
                 return True
 
             current_trial += 1
 
         return False
+
+
+    def point_right_gripper_at(self, target,
+                               diff_x = 0.2,
+                               diff_y = 0.2,
+                               diff_z = 0.3,
+                               num_trials = 100):
+        """
+
+        Parameters:
+        target: a PoseStamped
+        """
+        return self.point_gripper_at("right_arm",
+                                     target,
+                                     diff_x,
+                                     diff_y,
+                                     diff_z,
+                                     num_trials
+                                     )
+    def point_left_gripper_at(self, target,
+                              diff_x = 0.2,
+                              diff_y = 0.2,
+                              diff_z = 0.3,
+                              num_trials = 100):
+        """
+
+        Parameters:
+        target: a PoseStamped
+        """
+        return self.point_gripper_at("left_arm",
+                                     target,
+                                     diff_x,
+                                     diff_y,
+                                     diff_z,
+                                     num_trials
+                                     )
+
+
 
 
 
