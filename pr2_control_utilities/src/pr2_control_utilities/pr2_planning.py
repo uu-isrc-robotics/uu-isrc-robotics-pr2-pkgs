@@ -40,6 +40,7 @@ from arm_navigation_msgs.msg import AllowedContactSpecification
 from arm_navigation_msgs.msg import Shape
 from arm_navigation_msgs.srv import SetPlanningSceneDiff
 from geometry_msgs.msg import PoseStamped
+from visualization_msgs.msg import Marker
 import tf
 import utils
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
@@ -85,6 +86,8 @@ class PR2MoveArm(object):
         self.left_ik = pr2_control_utilities.IKUtilities("left",
                                                          tf_listener=self.tf_listener)
 
+        self.arrows_pub = rospy.Publisher("~pointing_arrows",
+                        Marker)
 
         rospy.loginfo("%s is ready", self.__class__.__name__)
 
@@ -566,7 +569,8 @@ class PR2MoveArm(object):
                          diff_x = 0.2,
                          diff_y = 0.2,
                          diff_z = 0.3,
-                         num_trials = 100):
+                         num_trials = 100,
+                         visualize_arrow = False):
         """
 
         Parameters:
@@ -575,8 +579,12 @@ class PR2MoveArm(object):
         """
 
         assert isinstance(target, PoseStamped)
+        red_color = (1,1,0,0)
+        green_color = (1,0,1,0)
 
         if target.header.frame_id != "/base_link":
+            rospy.loginfo("Changing the frame from %s to %s", target.header.frame_id,
+                          "/base_link")
             self.tf_listener.waitForTransform("/base_link", target.header.frame_id,
                                               rospy.Time.now(), rospy.Duration(1))
             target = self.tf_listener.transformPose("/base_link", target)
@@ -596,7 +604,6 @@ class PR2MoveArm(object):
             gripper_y = random.uniform(ty - diff_y, ty + diff_y)
             gripper_z = random.uniform(tz, tz + diff_z)
 
-
             gripper_pose = (gripper_x, gripper_y, gripper_z)
 
             vec = (-gripper_x + tx,
@@ -612,13 +619,34 @@ class PR2MoveArm(object):
             #rospy.loginfo("Trying pose: %s, orientation: %s",
                           #gripper_pose, gripper_orientation)
 
+            if visualize_arrow:
+                arrow_pose = PoseStamped()
+                arrow_pose.header.frame_id = "/base_link"
+                arrow_pose.pose.position.x = gripper_pose[0]
+                arrow_pose.pose.position.y = gripper_pose[1]
+                arrow_pose.pose.position.z = gripper_pose[2]
+                arrow_pose.pose.orientation.x = gripper_orientation[0]
+                arrow_pose.pose.orientation.y = gripper_orientation[1]
+                arrow_pose.pose.orientation.z = gripper_orientation[2]
+                arrow_pose.pose.orientation.w = gripper_orientation[3]
+
             if ik_mover(gripper_pose,
                         gripper_orientation,
-                        "base_link",
+                        "/base_link",
                         5):
                 rospy.loginfo("Pointing was successful")
-                return True
+                if visualize_arrow:
+                    self.__visualize_arrow(arrow_pose,
+                                           target,
+                                           current_trial,
+                                           green_color, 0.01, 0.01)
 
+                return True
+            if visualize_arrow:
+                self.__visualize_arrow(arrow_pose,
+                                       target,
+                                       current_trial,
+                                       red_color, 0.01, 0.01)
             current_trial += 1
 
         return False
@@ -660,6 +688,33 @@ class PR2MoveArm(object):
                                      )
 
 
+    def __visualize_arrow(self, tail_pose,
+                          tip_pose,
+                          marker_id,
+                          color = (1.0, 1.0, 0, 0),
+                          shaft_radius = 0.2,
+                          head_radius = 0.01):
+        assert isinstance(tail_pose, PoseStamped)
+        assert isinstance(tip_pose, PoseStamped)
+        arrow = Marker()
+
+        arrow.points.append(tail_pose.pose.position)
+        arrow.points.append(tip_pose.pose.position)
+
+        arrow.header.frame_id = tail_pose.header.frame_id
+        arrow.action = Marker.ADD
+        arrow.type = Marker.ARROW
+        arrow.lifetime = rospy.Duration(0)
+        arrow.color.a = color[0]
+        arrow.color.r = color[1]
+        arrow.color.g = color[2]
+        arrow.color.b = color[3]
+
+        arrow.scale.x = shaft_radius
+        arrow.scale.y = head_radius
+        arrow.id = marker_id
+
+        self.arrows_pub.publish(arrow)
 
 
 
