@@ -121,9 +121,9 @@ class Pusher(object):
         dimensions = [box_msg.box_dims.x,
                       box_msg.box_dims.y,
                       box_msg.box_dims.z]    
-        allowed_contact_specification = self.planner.build_allowed_contact_specification(box_msg.pose,
-                                                                                         dimensions)
-        allowed_contact_specification = [allowed_contact_specification]
+        #allowed_contact_specification = self.planner.build_allowed_contact_specification(box_msg.pose,
+                                                                                         #dimensions)
+        #allowed_contact_specification = [allowed_contact_specification]
         
         #moving to pre_push position
         self.mover.close_right_gripper(True)
@@ -236,9 +236,9 @@ class Pusher(object):
         dimensions = [box_msg.box_dims.x,
                       box_msg.box_dims.y,
                       box_msg.box_dims.z]    
-        allowed_contact_specification = self.planner.build_allowed_contact_specification(box_msg.pose,
-                                                                                         dimensions)
-        allowed_contact_specification = [allowed_contact_specification]
+        #allowed_contact_specification = self.planner.build_allowed_contact_specification(box_msg.pose,
+                                                                                         #dimensions)
+        #allowed_contact_specification = [allowed_contact_specification]
         
         #moving to pre_push position
         self.mover.close_right_gripper(True)

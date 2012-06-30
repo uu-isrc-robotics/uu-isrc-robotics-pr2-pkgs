@@ -253,7 +253,7 @@ def main():
     starting_angles, end_angles = gripper_down_horizontal_angles()
 
     collision_operation = utils.build_collision_operations("right_arm", object_id)    
-    allowed_contact_specification = utils.build_allowed_contact_specification(box) 
+    #allowed_contact_specification = utils.build_allowed_contact_specification(box) 
     
     previous_pose = pr2_control_utilities.PR2JointMover(robot_state)
     previous_pose.store_targets()

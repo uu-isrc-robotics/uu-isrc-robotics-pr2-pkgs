@@ -46,6 +46,8 @@ from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticColl
 from actionlib_msgs.msg import GoalStatus
 from pr2_control_utilities.pr2_joint_mover import PR2JointMover
 
+from dynamic_reconfigure.server import Server
+from pr2_control_utilities.cfg import pr2_planningConfig
 
 import pr2_control_utilities
 import math
@@ -84,19 +86,29 @@ class PR2MoveArm(object):
                                                           tf_listener=self.tf_listener)
         self.left_ik = pr2_control_utilities.IKUtilities("left",
                                                          tf_listener=self.tf_listener)
-
+        
+        self.planner_service_name = ""
+        self.parameters_server = Server(pr2_planningConfig, self.__new_parameter)
+        
 
         rospy.loginfo("%s is ready", self.__class__.__name__)
+        
+    def __new_parameter(self, config, level):
+        self.planner_service_name = config["planner_service_name"]
+        rospy.loginfo("New planner service name: %s", self.planner_service_name)
+        return config
 
     def __move_arm(self, arm, position, orientation, frame_id,  waiting_time,
                    ordered_collision_operations = None,
                    allowed_contacts = None):
-
         goal = MoveArmGoal()
         goal.motion_plan_request.group_name = arm
         goal.motion_plan_request.num_planning_attempts = 2
         goal.motion_plan_request.planner_id = ""
-        goal.planner_service_name = "ompl_planning/plan_kinematic_path"
+        #goal.planner_service_name = "ompl_planning/plan_kinematic_path"
+        #goal.planner_service_name = "/chomp_planner_longrange/plan_path"
+        #goal.planner_service_name = "/collision_proximity_server_test/get_distance_aware_plan"
+        goal.planner_service_name = self.planner_service_name
         goal.motion_plan_request.allowed_planning_time = rospy.Duration(waiting_time/2.)
 
         position_constraint = PositionConstraint()
@@ -145,6 +157,7 @@ class PR2MoveArm(object):
 
         if ordered_collision_operations is not None:
             rospy.loginfo("Adding ordered collisions")
+            #goal.planning_scene_diff.allowed_contacts = allowed_contacts
             goal.operations = ordered_collision_operations
         if allowed_contacts is not None:
             rospy.loginfo("Adding allowed_contacts")
@@ -491,37 +504,140 @@ class PR2MoveArm(object):
     #        angle -= 2*math.pi
     #    return angle
 
-    def build_collision_operations(self, object1, object2):
+    #def build_collision_operations(self, object1, object2):
+        #msg = OrderedCollisionOperations()
+        #collision = CollisionOperation()
+
+        #collision.operation = CollisionOperation.DISABLE
+        #collision.object1 = object1
+        #collision.object2 = object2
+        #msg.collision_operations.append(collision)
+        #return msg
+    
+    def build_collision_operations(self, arm_name, 
+                                   penetration_depth,
+                                   enable=False):
+        
         msg = OrderedCollisionOperations()
-        collision = CollisionOperation()
+        
+        
+        if arm_name == "right_arm":
+            link_names = ["r_gripper_palm_joint", 
+                          "r_gripper_l_finger_joint", 
+                          "r_gripper_l_finger_tip_joint",
+                          "r_gripper_led_joint", 
+                          "r_gripper_motor_accelerometer_joint", 
+                          "r_gripper_motor_slider_joint",
+                          "r_gripper_motor_screw_joint", 
+                          "r_gripper_r_finger_joint",
+                          "r_gripper_r_finger_tip_joint",
+                          "r_gripper_joint", 
+                          "r_gripper_tool_joint",
+                          ]
+        else:
+            link_names = ["l_gripper_palm_joint", 
+                          "l_gripper_l_finger_joint", 
+                          "l_gripper_l_finger_tip_joint",
+                          "l_gripper_led_joint", 
+                          "l_gripper_motor_accelerometer_joint", 
+                          "l_gripper_motor_slider_joint",
+                          "l_gripper_motor_screw_joint", 
+                          "l_gripper_r_finger_joint",
+                          "l_gripper_r_finger_tip_joint",
+                          "l_gripper_joint", 
+                          "l_gripper_tool_joint",
+                          ]           
+        for link in link_names:
+            collision = CollisionOperation()
+            if enable:
+                collision.operation = CollisionOperation.ENABLE
+            else:
+                collision.operation = CollisionOperation.DISABLE
+            collision.object1 = link
+            collision.object2 = "collision_map"
+            collision.penetration_distance = penetration_depth
+            msg.collision_operations.append(collision)            
+        return msg    
 
-        collision.operation = CollisionOperation.DISABLE
-        collision.object1 = object1
-        collision.object2 = object2
-        msg.collision_operations.append(collision)
-        return msg
+    #def build_allowed_contact_specification(self, box_pose, box_dimensions):
+        #msg = AllowedContactSpecification()
+        #msg.name = "grasping_object_region"
+        #shape = Shape()
+        #shape.type = shape.BOX
+        #shape.dimensions = box_dimensions
 
-    def build_allowed_contact_specification(self, box_pose, box_dimensions):
-        msg = AllowedContactSpecification()
-        msg.name = "grasping_object_region"
-        shape = Shape()
-        shape.type = shape.BOX
-        shape.dimensions = box_dimensions
+        #msg.shape = shape
+        #msg.pose_stamped = box_pose
 
-        msg.shape = shape
-        msg.pose_stamped = box_pose
+        #msg.link_names = ["r_gripper_palm_link",
+                          #"r_gripper_l_finger_link",
+                          #"r_gripper_r_finger_link",
+                          #"r_gripper_l_finger_tip_link",
+                          #"r_gripper_r_finger_tip_link",
+                          #"l_gripper_palm_link",
+                          #"l_gripper_l_finger_link",
+                          #"l_gripper_r_finger_link",
+                          #"l_gripper_l_finger_tip_link",
+                          #"l_gripper_r_finger_tip_link"]
+        #return msg
 
-        msg.link_names = ["r_gripper_palm_link",
-                          "r_gripper_l_finger_link",
-                          "r_gripper_r_finger_link",
-                          "r_gripper_l_finger_tip_link",
-                          "r_gripper_r_finger_tip_link",
-                          "l_gripper_palm_link",
-                          "l_gripper_l_finger_link",
-                          "l_gripper_r_finger_link",
-                          "l_gripper_l_finger_tip_link",
-                          "l_gripper_r_finger_tip_link"]
-        return msg
+    def build_allowed_contact_specification(self,
+                                            shape,
+                                            pose,
+                                            arm_name,                                            
+                                            penetration_depth,
+                                            collision_object_name = "collision_map",
+                                            ):
+        """
+        Creates a motion_planning_msgs/AllowedContactSpecification message. This can be passed
+        to a move_[left|right]_arm call to allow for contacts.
+        
+        Parameters:
+        name: the name of the regions
+        shape: the shape of the region in the environment. A arm_navigation_msgs/Shape msg
+        pose: the PoseStamped of the space defining the region
+        arm_name: either "right_arm" or "left_arm", the arm which is allowed to collide
+        penetration_depth: the maximum penetration depth allowed for every link        
+        """
+        
+        
+        if arm_name == "right_arm":
+            link_names = ["r_gripper_palm_joint", 
+                          "r_gripper_l_finger_joint", 
+                          "r_gripper_l_finger_tip_joint",
+                          "r_gripper_led_joint", 
+                          "r_gripper_motor_accelerometer_joint", 
+                          "r_gripper_motor_slider_joint",
+                          "r_gripper_motor_screw_joint", 
+                          "r_gripper_r_finger_joint",
+                          "r_gripper_r_finger_tip_joint",
+                          "r_gripper_joint", 
+                          "r_gripper_tool_joint",
+                          ]
+        else:
+            link_names = ["l_gripper_palm_joint", 
+                          "l_gripper_l_finger_joint", 
+                          "l_gripper_l_finger_tip_joint",
+                          "l_gripper_led_joint", 
+                          "l_gripper_motor_accelerometer_joint", 
+                          "l_gripper_motor_slider_joint",
+                          "l_gripper_motor_screw_joint", 
+                          "l_gripper_r_finger_joint",
+                          "l_gripper_r_finger_tip_joint",
+                          "l_gripper_joint", 
+                          "l_gripper_tool_joint",
+                          ]        
+
+        collisions = []            
+        for link in link_names:
+            msg = AllowedContactSpecification()
+            msg.name = "collision " + link + " vs " + collision_object_name    
+            msg.shape = shape
+            msg.pose_stamped = pose
+            msg.link_names = [link, collision_object_name]                
+            msg.penetration_depth = penetration_depth
+            collisions.append(msg)
+        return collisions
 
     def take_static_map(self):
         rospy.loginfo("Taking a static collision map")
