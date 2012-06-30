@@ -854,7 +854,7 @@ if __name__ == "__main__":
         msg = cStringIO.StringIO()
         parser.print_help(msg)        
         rospy.logerr("please specify at least a load or a save action.\n%s", msg.getvalue())
-        rospy.signal_shutdown()
+        rospy.signal_shutdown("wrong parameters")
         sys.exit()
     
     rospy.init_node('pr2_joint_loader', anonymous=True)
