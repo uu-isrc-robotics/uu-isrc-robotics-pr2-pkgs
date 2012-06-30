@@ -94,6 +94,7 @@ class PR2TrajectoryMarkers(object):
         else:
             self.ik_utils = self.planner.left_ik
 
+        self.planning_waiting_time = 10.0
         rospy.loginfo("PR2TrajectoryMarkers (%s) is ready", whicharm)
 
     def create_menu(self):
@@ -273,10 +274,10 @@ class PR2TrajectoryMarkers(object):
       
         if self.whicharm == "right":
             rospy.loginfo("Moving the right arm")
-            self.planner.move_right_arm(pos, orientation, frame, 2.0)
+            self.planner.move_right_arm(pos, orientation, frame, self.planning_waiting_time)
         else:
             rospy.loginfo("Moving the left arm")
-            self.planner.move_left_arm(pos, orientation, frame, 2.0)
+            self.planner.move_left_arm(pos, orientation, frame, self.planning_waiting_time)
 
     def collision_free_arm(self, feedback):
         """
@@ -297,7 +298,7 @@ class PR2TrajectoryMarkers(object):
         if self.whicharm == "right":
             rospy.loginfo("Moving the right arm (non collision)")
             self.planner.move_right_arm_non_collision(pos, orientation, 
-                                                      frame, 2.0)
+                                                      frame, self.a)
         else:
             rospy.loginfo("Moving the left arm (non collision)")
             self.planner.move_left_arm_non_collision(pos, orientation, 
