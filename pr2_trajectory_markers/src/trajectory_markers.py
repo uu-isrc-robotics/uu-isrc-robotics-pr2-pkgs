@@ -57,6 +57,8 @@ class PR2TrajectoryMarkers(object):
                 MarkerArray)
         self.trajectory_pub = rospy.Publisher("~trajectory_poses", 
                 PoseArray)
+        self.gripper_pose_pub = rospy.Publisher("~gripper_pose",
+                PoseStamped)
         rospy.Subscriber("~overwrite_trajectory", 
                 PoseArray,
                 self.overwrite_trajectory)
@@ -130,10 +132,16 @@ class PR2TrajectoryMarkers(object):
         If the mouse button is released change the gripper color according to 
         the IK result. Quite awkward, trying to get a nicer way to do it.
         """
+
+        #publish the gripper pose
+        gripper_pos = PoseStamped()
+        gripper_pos.header.frame_id = feedback.header.frame_id
+        gripper_pos.pose = feedback.pose
+        self.gripper_pose_pub.publish(gripper_pos)
+                
         if feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE:
             self.last_gripper_pose =  feedback.pose
-        #rospy.loginfo("Updating Marker: %d", feedback.event_type)
-        #rospy.loginfo("POS: %s", feedback.pose.position)
+
         if (self.last_gripper_pose and 
                     feedback.event_type ==  InteractiveMarkerFeedback.MOUSE_UP):
             self.last_gripper_pose = None
