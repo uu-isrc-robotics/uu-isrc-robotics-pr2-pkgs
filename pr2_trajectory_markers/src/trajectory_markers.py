@@ -298,7 +298,7 @@ class PR2TrajectoryMarkers(object):
         if self.whicharm == "right":
             rospy.loginfo("Moving the right arm (non collision)")
             self.planner.move_right_arm_non_collision(pos, orientation, 
-                                                      frame, self.a)
+                                                      frame, 2.0)
         else:
             rospy.loginfo("Moving the left arm (non collision)")
             self.planner.move_left_arm_non_collision(pos, orientation, 
@@ -354,7 +354,7 @@ class PR2TrajectoryMarkers(object):
             all_trajectory.extend(filtered_traj)
 
         all_trajectory = normalize_trajectory(all_trajectory, starting_angles)
-        rospy.loginfo("New interpolated a trajectory with %d elements", 
+        rospy.loginfo("New interpolated trajectory with %d elements", 
                 len(all_trajectory))
          
         return all_trajectory
