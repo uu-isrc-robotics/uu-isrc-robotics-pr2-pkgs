@@ -39,7 +39,8 @@ from arm_navigation_msgs.msg import OrderedCollisionOperations, CollisionOperati
 from arm_navigation_msgs.msg import AllowedContactSpecification
 from arm_navigation_msgs.msg import Shape
 from arm_navigation_msgs.srv import SetPlanningSceneDiff
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PoseArray
+from trajectory_msgs.msg import JointTrajectory
 import tf
 import utils
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
@@ -54,6 +55,10 @@ import math
 import random
 import numpy as np
 
+
+from kinematics_msgs.srv import GetKinematicSolverInfo, GetPositionIK, GetPositionFK, GetConstraintAwarePositionIK, GetConstraintAwarePositionIKRequest
+req = GetPositionIK()
+print req._md5sum
 
 class PR2MoveArm(object):
     def __init__(self, joint_mover = None):
@@ -84,12 +89,15 @@ class PR2MoveArm(object):
         self.tf_listener = tf.TransformListener()
         self.right_ik = pr2_control_utilities.IKUtilities("right",
                                                           tf_listener=self.tf_listener)
+        self.right_ik.check_services_and_get_ik_info()
+        
         self.left_ik = pr2_control_utilities.IKUtilities("left",
                                                          tf_listener=self.tf_listener)
+        self.left_ik.check_services_and_get_ik_info()
         
         self.planner_service_name = ""
         self.parameters_server = Server(pr2_planningConfig, self.__new_parameter)
-        
+
 
         rospy.loginfo("%s is ready", self.__class__.__name__)
         
@@ -210,6 +218,8 @@ class PR2MoveArm(object):
 
         res = ik.run_ik(pose_stamped, joint_angles, link_name, collision_aware=0)
         if res is None:
+            return False
+        elif res[0] is None:
             return False
         elif len(res[0]) == 0:
             return False
@@ -341,6 +351,46 @@ class PR2MoveArm(object):
                                              frame_id,
                                              time_required,
                                              collision_aware=1)
+
+    def execute_JointTrajectory(self, joint_trajectory, normalize=True, max_vel = 0.2):
+        """Executes a trajectory. It does not check if the trajectory is safe, nor it performs
+        any interpolation or smoothing! If velocities or accelerations in joint_trajectory are not set
+        then they are automatically calculated.
+        
+        Parameters:
+        joint_trajectory: a JointTrajectory msg
+        normalize: if True the continous joints are normalized
+        max_vel = maximum velocity for all the joints
+        
+        """
+        
+        isinstance(joint_trajectory, JointTrajectory)
+        if joint_trajectory.joint_names[0][0] == "l":
+            joint_angles = self.joint_mover.robot_state.right_arm_positions
+            ik = self.right_ik
+        else:
+            joint_angles = self.joint_mover.robot_state.right_arm_positions
+            ik = self.right_ik
+        
+        if len(joint_trajectory.points) == 0:
+            rospy.logwarn("Empty trajectory!")
+            return False
+        
+        #create velocities if they don't exist
+        if len(joint_trajectory.points[0].velocities) == 0:
+            trajectory = [p.positions for p in joint_trajectory.points]
+            if normalize:
+                #trajectory = self.__normalize_trajectory(trajectory, joint_angles)
+                trajectory = utils.normalize_trajectory(trajectory, joint_angles)            
+            (times, vels) = ik.trajectory_times_and_vels(trajectory, [max_vel]*7)
+            
+            for i in xrange(len(joint_trajectory.points)):
+                joint_trajectory.points[i].positions = trajectory[i]
+                joint_trajectory.points[i].velocities = vels[i]
+                joint_trajectory.points[i].time_from_start = rospy.Duration(times[i])
+        
+        self.joint_mover.execute_JointTrajectory(joint_trajectory)
+
 
 
     def __create_trjectory_non_collision(self,
@@ -482,8 +532,34 @@ class PR2MoveArm(object):
                                                  orientations,
                                                  frame_id,
                                                  max_vel,
-                                                 ignore_errors,
-                                                 normalize)
+                                                 ignore_errors = False,
+                                                 normalize = True)
+
+    def move_arm_trajectory(self, poses, which_arm, max_vel, 
+                            ignore_errors = False, 
+                            normalize = True):
+        """Move an arm along a trajectory.
+        
+        Parameters:
+        poses: a geometry_msgs/PoseStamped msg with the cartesian poses to follow
+        which_arm: either left_arm or right_arm, a string
+        max_vel: the maximum velocity for all the joints
+        ignore_errors: if True, points along the trajectory with no IK solution will simply be discarded without raising an error
+        normalize: normalize angles so that continuous joints don't spin indefinitely
+        """
+        assert isinstance(poses, PoseArray)
+        frame_id = poses.header.frame_id        
+        positions = [ (p.position.x, p.position.y, p.position.z) for p in poses.poses]
+        orientations = [ (p.orientation.x, p.orientation.y, p.orientation.z) for p in poses.poses]
+        return self.__move_arm_trajectory_non_collision("which_arm",
+                                                        positions,
+                                                        orientations,
+                                                        frame_id,
+                                                        max_vel,
+                                                        ignore_errors,
+                                                        normalize)
+                                                        
+                                                        
 
 
     ##normalize a trajectory (list of lists of joint angles), so that the desired angles
