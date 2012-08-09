@@ -276,7 +276,34 @@ class PR2JointMover(object):
         
         if wait:
             client.wait_for_result()
-    
+
+    def execute_JointTrajectory(self, joint_trajectory, wait=True, ):
+        """Executes a trajectory. It does not check if the trajectory is safe, nor it performs
+        any interpolation or smoothing! For a more fine grained control use execute_trajectory.
+        
+        Parameters:
+        joint_trajectory: a JointTrajectory msg
+        wait: block until trajectory is completed
+        """
+        
+        isinstance(joint_trajectory, JointTrajectory)
+        if joint_trajectory.joint_names[0][0] == "l":
+            client = self.l_arm_client
+            self.l_arm_done = False   
+            done_cb=self.__l_arm_done_cb
+        else:
+            client = self.r_arm_client
+            self.r_arm_done = False            
+            done_cb=self.__r_arm_done_cb
+        
+        goal = JointTrajectoryGoal()
+        goal.trajectory = joint_trajectory
+        client.send_goal(goal, done_cb=done_cb)
+        
+        if wait:
+            client.wait_for_result()        
+        
+        
     def execute_trajectory(self, trajectory, times, vels, arm, wait=False):
         '''
         Executes a trajectory. It does not check if the trajectory is safe, nor it performs
