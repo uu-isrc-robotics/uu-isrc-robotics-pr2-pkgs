@@ -41,6 +41,7 @@ from arm_navigation_msgs.msg import Shape
 from arm_navigation_msgs.srv import SetPlanningSceneDiff
 from geometry_msgs.msg import PoseStamped, PoseArray
 from trajectory_msgs.msg import JointTrajectory
+from visualization_msgs.msg import Marker
 import tf
 import utils
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
@@ -98,6 +99,8 @@ class PR2MoveArm(object):
         self.planner_service_name = ""
         self.parameters_server = Server(pr2_planningConfig, self.__new_parameter)
 
+        self.arrows_pub = rospy.Publisher("~pointing_arrows",
+                        Marker)
 
         rospy.loginfo("%s is ready", self.__class__.__name__)
         
@@ -201,6 +204,26 @@ class PR2MoveArm(object):
                                waiting_time,
                                ordered_collision_operations,
                                allowed_contacts)
+
+
+    def find_best_arm(self, pose):
+        """Given a PoseStamped, returns the best arm with which to reach that pose.
+        So far it is just a simple euristic.
+
+        Parameters:
+        pose: a PoseStamped
+
+        Returns:
+        either left_arm or right_arm
+        """
+        assert isinstance(pose, PoseStamped)
+        self.tf_listener.waitForTransform("base_link", pose.header.frame_id,
+                                          rospy.Time.now(), rospy.Duration(1))
+        newpose = self.tf_listener.transformPose("base_link", pose)
+        if newpose.pose.position.y > 0:
+            return "left_arm"
+        else:
+            return "right_arm"
 
 
     def __check_ik_feasible(self, arm, pose_stamped):
@@ -733,20 +756,27 @@ class PR2MoveArm(object):
             rospy.loginfo("some other non-success state was reached for static collision map.  Proceed with caution.")
             return 0
 
-    def point_right_gripper_at(self, target,
-                               diff_x = 0.2,
-                               diff_y = 0.2,
-                               diff_z = 0.3,
-                               num_trials = 100):
+    def point_gripper_at(self, which_arm,
+                         target,
+                         diff_x = 0.2,
+                         diff_y = 0.2,
+                         diff_z = 0.3,
+                         num_trials = 100,
+                         visualize_arrow = False):
         """
 
         Parameters:
         target: a PoseStamped
+        which_arm: either left_arm or right_arm
         """
 
         assert isinstance(target, PoseStamped)
+        red_color = (1,1,0,0)
+        green_color = (1,0,1,0)
 
         if target.header.frame_id != "/base_link":
+            rospy.loginfo("Changing the frame from %s to %s", target.header.frame_id,
+                          "/base_link")
             self.tf_listener.waitForTransform("/base_link", target.header.frame_id,
                                               rospy.Time.now(), rospy.Duration(1))
             target = self.tf_listener.transformPose("/base_link", target)
@@ -756,11 +786,15 @@ class PR2MoveArm(object):
         tz = target.pose.position.z
 
         current_trial = 0
+        if which_arm == "right_arm":
+            ik_mover = self.move_right_arm_with_ik
+        else:
+            ik_mover = self.move_left_arm_with_ik
+
         while current_trial < num_trials:
             gripper_x = random.uniform(tx-diff_x, tx)
             gripper_y = random.uniform(ty - diff_y, ty + diff_y)
             gripper_z = random.uniform(tz, tz + diff_z)
-
 
             gripper_pose = (gripper_x, gripper_y, gripper_z)
 
@@ -777,16 +811,102 @@ class PR2MoveArm(object):
             #rospy.loginfo("Trying pose: %s, orientation: %s",
                           #gripper_pose, gripper_orientation)
 
-            if self.move_right_arm_with_ik(gripper_pose,
-                                           gripper_orientation,
-                                           "base_link",
-                                           5):
-                rospy.loginfo("Pointing was successful")
-                return True
+            if visualize_arrow:
+                arrow_pose = PoseStamped()
+                arrow_pose.header.frame_id = "/base_link"
+                arrow_pose.pose.position.x = gripper_pose[0]
+                arrow_pose.pose.position.y = gripper_pose[1]
+                arrow_pose.pose.position.z = gripper_pose[2]
+                arrow_pose.pose.orientation.x = gripper_orientation[0]
+                arrow_pose.pose.orientation.y = gripper_orientation[1]
+                arrow_pose.pose.orientation.z = gripper_orientation[2]
+                arrow_pose.pose.orientation.w = gripper_orientation[3]
 
+            if ik_mover(gripper_pose,
+                        gripper_orientation,
+                        "/base_link",
+                        5):
+                rospy.loginfo("Pointing was successful")
+                if visualize_arrow:
+                    self.__visualize_arrow(arrow_pose,
+                                           target,
+                                           current_trial,
+                                           green_color, 0.01, 0.01)
+
+                return True
+            if visualize_arrow:
+                self.__visualize_arrow(arrow_pose,
+                                       target,
+                                       current_trial,
+                                       red_color, 0.01, 0.01)
             current_trial += 1
 
         return False
+
+
+    def point_right_gripper_at(self, target,
+                               diff_x = 0.2,
+                               diff_y = 0.2,
+                               diff_z = 0.3,
+                               num_trials = 100):
+        """
+
+        Parameters:
+        target: a PoseStamped
+        """
+        return self.point_gripper_at("right_arm",
+                                     target,
+                                     diff_x,
+                                     diff_y,
+                                     diff_z,
+                                     num_trials
+                                     )
+    def point_left_gripper_at(self, target,
+                              diff_x = 0.2,
+                              diff_y = 0.2,
+                              diff_z = 0.3,
+                              num_trials = 100):
+        """
+
+        Parameters:
+        target: a PoseStamped
+        """
+        return self.point_gripper_at("left_arm",
+                                     target,
+                                     diff_x,
+                                     diff_y,
+                                     diff_z,
+                                     num_trials
+                                     )
+
+
+    def __visualize_arrow(self, tail_pose,
+                          tip_pose,
+                          marker_id,
+                          color = (1.0, 1.0, 0, 0),
+                          shaft_radius = 0.2,
+                          head_radius = 0.01):
+        assert isinstance(tail_pose, PoseStamped)
+        assert isinstance(tip_pose, PoseStamped)
+        arrow = Marker()
+
+        arrow.points.append(tail_pose.pose.position)
+        arrow.points.append(tip_pose.pose.position)
+
+        arrow.header.frame_id = tail_pose.header.frame_id
+        arrow.action = Marker.ADD
+        arrow.type = Marker.ARROW
+        arrow.lifetime = rospy.Duration(0)
+        arrow.color.a = color[0]
+        arrow.color.r = color[1]
+        arrow.color.g = color[2]
+        arrow.color.b = color[3]
+
+        arrow.scale.x = shaft_radius
+        arrow.scale.y = head_radius
+        arrow.id = marker_id
+
+        self.arrows_pub.publish(arrow)
 
 
 
