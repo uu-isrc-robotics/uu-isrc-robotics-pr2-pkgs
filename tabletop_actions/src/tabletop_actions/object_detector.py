@@ -386,23 +386,36 @@ class GenericDetector(object):
                  collision_processing = "/tabletop_collision_map_processing/tabletop_collision_map_processing",
                  tabletop_segmentation = None):
 
-        rospy.loginfo("waiting for %s service" % detector_service)
-        rospy.wait_for_service(detector_service)
-        self.detector =  rospy.ServiceProxy(detector_service,
-                TabletopDetection)
+        if detector_service is not None:
+            rospy.loginfo("waiting for %s service" % detector_service)
+            rospy.wait_for_service(detector_service)
+            self.detector =  rospy.ServiceProxy(detector_service,
+                    TabletopDetection)
+        else:
+            rospy.logwarn("Not using any object detector service")
+            self.detector = None
 
-        rospy.loginfo("waiting for %s service" % box_detector)
-        rospy.wait_for_service(box_detector)
-        self.box_detector =  rospy.ServiceProxy(box_detector,
-                FindClusterBoundingBox)
+        if box_detector is not None:
+            rospy.loginfo("waiting for %s service" % box_detector)
+            rospy.wait_for_service(box_detector)
+            self.box_detector =  rospy.ServiceProxy(box_detector,
+                    FindClusterBoundingBox)
+        else:
+            rospy.loginfo("Not using any box detector service")
+            self.box_detector = None
 
-        rospy.loginfo("Waiting for collision processing service %s to come up",
-                      collision_processing)
-        rospy.wait_for_service(collision_processing)
-        self.collision_processing = rospy.ServiceProxy(collision_processing,
-                TabletopCollisionMapProcessing)
 
-        if tabletop_segmentation != None:
+        if collision_processing is not None:
+            rospy.loginfo("Waiting for collision processing service %s to come up",
+                          collision_processing)
+            rospy.wait_for_service(collision_processing)
+            self.collision_processing = rospy.ServiceProxy(collision_processing,
+                    TabletopCollisionMapProcessing)
+        else:
+            self.collision_processing = None
+        
+
+        if tabletop_segmentation is not None:
             rospy.loginfo("Waiting for segmentation service %s to come up", tabletop_segmentation)
             rospy.wait_for_service(tabletop_segmentation)
             self.segment_only_srv = rospy.ServiceProxy(tabletop_segmentation,
