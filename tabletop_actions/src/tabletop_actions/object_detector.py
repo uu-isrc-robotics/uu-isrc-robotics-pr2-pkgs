@@ -1,17 +1,57 @@
 #import tabletop_actions
 import rospy
 
-from object_manipulation_msgs.srv import FindClusterBoundingBox, FindClusterBoundingBoxRequest
+from object_manipulation_msgs.srv import FindClusterBoundingBox2, FindClusterBoundingBox2Request, FindClusterBoundingBox2Response
+from object_manipulation_msgs.srv import FindClusterBoundingBox, FindClusterBoundingBoxRequest, FindClusterBoundingBoxResponse
 from tabletop_object_detector.srv import TabletopDetection, TabletopDetectionRequest, TabletopDetectionResponse
 from tabletop_object_detector.srv import TabletopSegmentation, TabletopSegmentationResponse
 from tabletop_collision_map_processing.srv import TabletopCollisionMapProcessing, TabletopCollisionMapProcessingRequest
 from household_objects_database_msgs.msg import DatabaseModelPoseList
+from sensor_msgs.msg import PointCloud, PointCloud2
+import sensor_msgs.msg as sm
 
 import random
 from rospy.service import ServiceException
 from visualization_msgs.msg import Marker
 import math
+import numpy as np
 from tf import transformations
+
+def xyzrgb2pc(xyz,bgr,frame_id):
+    height= xyz.shape[0]
+    width = xyz.shape[1]
+    assert bgr.shape[0] == height
+    assert bgr.shape[1] == width
+
+    arr = np.empty((height,width,8),dtype='float32')
+    arr[:,:,0:3] = xyz
+    bgr1 = np.empty((height,width,4),dtype='uint8')
+    bgr1[:,:,0:3] = bgr
+    arr[:,:,4] = bgr1.view(dtype='float32').reshape(height, width)
+    data = arr.tostring()
+    msg = sm.PointCloud2()
+    msg.data = data
+    msg.header.frame_id = frame_id
+    msg.fields = [sm.PointField(name='x',offset=0,datatype=7,count=1),
+                  sm.PointField(name='y',offset=4,datatype=7,count=1),
+                  sm.PointField(name='z',offset=8,datatype=7,count=1),
+                  sm.PointField(name='rgb',offset=16,datatype=7,count=1)]
+    msg.is_dense = False
+    msg.width=width
+    msg.height=height
+    msg.header.stamp = rospy.Time.now()
+    msg.point_step = 32
+    msg.row_step = 32 * width
+    msg.is_bigendian = False
+
+    return msg
+
+def PointCloud_to_PointCloud2(pc):
+    isinstance(pc, PointCloud)
+    xyz = np.array([[pt.x, pt.y, pt.z] for pt in pc.points])[None,:,:]
+    rgb = np.zeros(xyz.shape)
+    pc2 = xyzrgb2pc(xyz, rgb, pc.header.frame_id)
+    return pc2
 
 class ObjectDetector(object):
     def __init__(self):
@@ -251,7 +291,7 @@ class ObjectDetector(object):
         >> box_msg = detector.detect_bounding_box(cluster)
 
         Parameters:
-        cluster: a PointCloud msg. It can be returned by one of the detect_*
+        cluster: a PointCloud or PointCloud2 msg. It can be returned by one of the detect_*
                  methods. If none an object will be searched for.
         cluster_choser: if cluster is None, use this choser to select when
                         detecting. Default to find_random_cluster.
@@ -276,6 +316,9 @@ class ObjectDetector(object):
             cluster = finder(detection_result.detection.clusters)
 
         req = FindClusterBoundingBoxRequest()
+        #using only PointCloud2 now
+        if type(cluster) is PointCloud:
+            cluster = PointCloud_to_PointCloud2(cluster)
         req.cluster = cluster
         try:
             self.last_box_msg = self.box_detector(req)
@@ -382,7 +425,7 @@ class GenericDetector(object):
     """
     def __init__(self,
                  detector_service="object_detection",
-                 box_detector="find_cluster_bounding_box",
+                 box_detector="find_cluster_bounding_box2",
                  collision_processing = "/tabletop_collision_map_processing/tabletop_collision_map_processing",
                  tabletop_segmentation = None):
 
@@ -399,7 +442,7 @@ class GenericDetector(object):
             rospy.loginfo("waiting for %s service" % box_detector)
             rospy.wait_for_service(box_detector)
             self.box_detector =  rospy.ServiceProxy(box_detector,
-                    FindClusterBoundingBox)
+                    FindClusterBoundingBox2)
         else:
             rospy.loginfo("Not using any box detector service")
             self.box_detector = None
@@ -635,6 +678,45 @@ class GenericDetector(object):
             self.last_collision_processing_msg = None
         return self.last_collision_processing_msg
 
+    def get_min_max_box(self, box):
+        """
+        Returns the minimum and the maximum points
+        of a bounding box.
+        Note: Using only two points to describe a cube assumes that the cube
+        is parallel to the frame of reference defined in box. If not it will be
+        an approximation.
+        
+        Parameters:
+        box: a FindClusterBoundingBoxResponse msg
+        
+        Returns:
+        (xmin, ymin, zmin), (xmax, ymax, zmax)
+        """
+        assert isinstance(box, FindClusterBoundingBox2Response)
+        #translation = [box.pose.pose.position.x,
+                       #box.pose.pose.position.y,
+                       #box.pose.pose.position.z,
+                       #1
+                      #]
+        #rotation = [box.pose.pose.orientation.x,
+                    #box.pose.pose.orientation.y,
+                    #box.pose.pose.orientation.z,
+                    #box.pose.pose.orientation.w
+                   #]        
+        #angles = transformations.euler_from_quaternion(rotation)
+        #T = transformations.compose_matrix(translate=translation,
+                                           #angles=angles)
+        x_dim = box.box_dims.x
+        y_dim = box.box_dims.y
+        z_dim = box.box_dims.z
+        
+        pmin = (-x_dim/2., -y_dim/2., -z_dim/2)
+        pmax = (x_dim/2., y_dim/2., z_dim/2)
+        
+        return pmin, pmax           
+        
+        
+        
 
     def detect_bounding_box(self, cluster = None,
                             cluster_choser = None):
@@ -676,7 +758,7 @@ class GenericDetector(object):
                 return None
             cluster = finder(detection_result.detection.clusters)
 
-        req = FindClusterBoundingBoxRequest()
+        req = FindClusterBoundingBox2Request()
         req.cluster = cluster
         try:
             self.last_box_msg = self.box_detector(req)
@@ -775,3 +857,4 @@ class GenericDetector(object):
                 return True
             trials -= 1
         return False
+    
