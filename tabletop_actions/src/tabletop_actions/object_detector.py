@@ -515,6 +515,10 @@ class GenericDetector(object):
         None otherwise
         """
         self.last_detection_msg = self.__detect(self.detector)
+        if self.last_detection_msg is not None:
+            rospy.loginfo("DETECTION MSG:\n%s", self.last_detection_msg.detection.models)
+        else:
+            rospy.logwarn("No detection done!!")
         return self.last_detection_msg
 
     def segment_only(self):
@@ -759,7 +763,7 @@ class GenericDetector(object):
             cluster = finder(detection_result.detection.clusters)
 
         req = FindClusterBoundingBox2Request()
-        req.cluster = cluster
+        req.cluster = PointCloud_to_PointCloud2(cluster)
         try:
             self.last_box_msg = self.box_detector(req)
         except rospy.ServiceException, e:
