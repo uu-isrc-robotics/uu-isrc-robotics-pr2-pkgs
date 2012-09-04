@@ -125,6 +125,7 @@ class PR2BaseMover(object):
                               inhibit_y = False,
                               inhibit_theta = False,
                               safety_dist = 0.3,
+                              frame_id = "/base_link",                              
                               ):
         '''
         Drive to the relative pos (diplacement)
@@ -133,7 +134,7 @@ class PR2BaseMover(object):
         
         desired_pos = utils.convert_point(self.listener,
                                           (pos[0],pos[1],0),
-                                          "/base_link", 
+                                          frame_id, 
                                           "odom_combined")
         _ , rot = self.current_position()        
         desired_rot = fix_angle(rot[2] + pos[2])

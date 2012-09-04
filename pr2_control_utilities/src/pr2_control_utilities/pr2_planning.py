@@ -758,8 +758,8 @@ class PR2MoveArm(object):
 
     def point_gripper_at(self, which_arm,
                          target,
-                         diff_x = 0.2,
-                         diff_y = 0.2,
+                         diff_x = 0.3,
+                         diff_y = 0.1,
                          diff_z = 0.3,
                          num_trials = 100,
                          visualize_arrow = False):
@@ -792,7 +792,7 @@ class PR2MoveArm(object):
             ik_mover = self.move_left_arm_with_ik
 
         while current_trial < num_trials:
-            gripper_x = random.uniform(tx-diff_x, tx)
+            gripper_x = random.uniform(tx - diff_x, tx)
             gripper_y = random.uniform(ty - diff_y, ty + diff_y)
             gripper_z = random.uniform(tz, tz + diff_z)
 
