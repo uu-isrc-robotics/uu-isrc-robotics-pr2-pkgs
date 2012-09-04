@@ -9,3 +9,4 @@ from pr2_base_mover import PR2BaseMover
 from kinematics_loader import KinematicsLoader
 from interpolated_ik_motion_planner.ik_utilities import IKUtilities
 from pr2_planning import PR2MoveArm
+from controller_manager_client import ControllerManagerClient
