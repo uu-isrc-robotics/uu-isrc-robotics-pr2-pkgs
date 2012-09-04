@@ -8,9 +8,11 @@ import rospy
 from object_manipulation_msgs.msg import PickupAction, PickupGoal, PickupResult
 from object_manipulation_msgs.msg import PlaceAction, PlaceGoal, PlaceResult
 from object_manipulation_msgs.msg import Grasp
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PointStamped
 import actionlib
 from tf import transformations
+
+from pr2_control_utilities import PR2MoveArm
 
 PICKUP_ACTION_NAME = "/object_manipulator/object_manipulator_pickup"
 PLACE_ACTION_NAME = "/object_manipulator/object_manipulator_place"
@@ -165,9 +167,9 @@ class Grabber(object):
         place_goal.approach.direction.vector.y = 0
         place_goal.approach.direction.vector.z = -1
 
-        place_goal.approach.desired_distance = desired_distance;
-        place_goal.approach.min_distance = min_distance;
-        place_goal.use_reactive_place = False;
+        place_goal.approach.desired_distance = desired_distance
+        place_goal.approach.min_distance = min_distance
+        place_goal.use_reactive_place = False
 
         self.place_client.send_goal_and_wait(place_goal, wait)
         res = self.place_client.get_result()
@@ -180,3 +182,62 @@ class Grabber(object):
 
         return res
 
+
+    def place_reactive(self, 
+                       arm_mover,
+                       place_locations,
+                       arm_name,
+                       object_height,
+                       frame_id = "/base_link",
+                       check_collisition = True,
+                       ):
+        """Very experimental reactive placing. It tries a set of locations listed
+        as (x,y,z) in place_locations, and for each of them it tries to move the arm
+        in place using the PR2MoveArm arm_mover.
+        The final position will have the gripper pointing downward. The object's
+        height is taken into consideration.
+        """
+        
+        assert isinstance(arm_mover, PR2MoveArm)
+        listener = arm_mover.tf_listener
+        if arm_name.startswith("right"):
+            if check_collisition:
+                move = arm_mover.move_right_arm
+            else:
+                move = arm_mover.move_right_arm_non_collision
+            open_gripper = arm_mover.joint_mover.open_right_gripper
+        else:
+            if check_collisition:
+                move = arm_mover.move_left_arm
+            else:
+                move = arm_mover.move_left_arm_non_collision
+            open_gripper = arm_mover.joint_mover.open_left_gripper
+
+        listener.waitForTransform("/base_link", frame_id, rospy.Time(), rospy.Duration(10))
+        
+        for position in place_locations:            
+            
+            orientation = (0,0.7,0,0.7)
+            point = PointStamped()
+            point.header.frame_id = frame_id
+            point.point.x = position[0]
+            point.point.y = position[1]
+            point.point.z = position[2] + object_height + 0.18
+            newpoint = listener.transformPoint("/base_link", point)
+                        
+            newposition = (newpoint.point.x,
+                           newpoint.point.y,
+                           newpoint.point.z)
+            
+            rospy.loginfo("Trying position %s, frame: %s", newposition, newpoint.header.frame_id)
+            if move(newposition, orientation, newpoint.header.frame_id, 10):
+                rospy.loginfo("PLace %s was good! Now opening the gripper")
+                open_gripper()
+                return True
+        rospy.logwarn("Could not place object into desired position")
+        return False
+            
+            
+            
+            
+        

@@ -100,7 +100,7 @@ def convert_point(listener, pos, from_frame, to_frame):
 
     """
     listener.waitForTransform(to_frame, from_frame,
-                                        rospy.Time(0), rospy.Duration(1))
+                                        rospy.Time(0), rospy.Duration(5))
     zeropose = PointStamped()
     zeropose.header.frame_id = from_frame
     zeropose.point.x = pos[0]
