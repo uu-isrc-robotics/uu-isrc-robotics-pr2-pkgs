@@ -427,7 +427,7 @@ class GenericDetector(object):
                  detector_service="object_detection",
                  box_detector="find_cluster_bounding_box2",
                  collision_processing = "/tabletop_collision_map_processing/tabletop_collision_map_processing",
-                 tabletop_segmentation = None):
+                 tabletop_segmentation = "/tabletop_segmentation"):
 
         if detector_service is not None:
             rospy.loginfo("waiting for %s service" % detector_service)
@@ -515,9 +515,7 @@ class GenericDetector(object):
         None otherwise
         """
         self.last_detection_msg = self.__detect(self.detector)
-        if self.last_detection_msg is not None:
-            rospy.loginfo("DETECTION MSG:\n%s", self.last_detection_msg.detection.models)
-        else:
+        if self.last_detection_msg is None:
             rospy.logwarn("No detection done!!")
         return self.last_detection_msg
 
@@ -568,6 +566,9 @@ class GenericDetector(object):
         if len(clusters) == 0:
             rospy.logerr("No object found!")
             return
+        #shortcut for a single object
+        if len(clusters) == 1:
+            return clusters[0]
 
         #finding the biggest cluster
         #TODO use the builtin max function
@@ -682,7 +683,7 @@ class GenericDetector(object):
             self.last_collision_processing_msg = None
         return self.last_collision_processing_msg
 
-    def get_min_max_box(self, box):
+    def get_min_max_box(self, box, padding = 0):
         """
         Returns the minimum and the maximum points
         of a bounding box.
@@ -692,6 +693,7 @@ class GenericDetector(object):
         
         Parameters:
         box: a FindClusterBoundingBoxResponse msg
+        padding: a float to increase the dimensions of the box
         
         Returns:
         (xmin, ymin, zmin), (xmax, ymax, zmax)
@@ -710,16 +712,25 @@ class GenericDetector(object):
         #angles = transformations.euler_from_quaternion(rotation)
         #T = transformations.compose_matrix(translate=translation,
                                            #angles=angles)
-        x_dim = box.box_dims.x
-        y_dim = box.box_dims.y
-        z_dim = box.box_dims.z
+        x_dim = box.box_dims.x + padding
+        y_dim = box.box_dims.y + padding
+        z_dim = box.box_dims.z + padding
+
+        position = [box.pose.pose.position.x,
+                    box.pose.pose.position.y,
+                    box.pose.pose.position.z,
+                    ]
+
         
-        pmin = (-x_dim/2., -y_dim/2., -z_dim/2)
-        pmax = (x_dim/2., y_dim/2., z_dim/2)
+        pmin = (position[0] - x_dim/2., 
+                position[1] - y_dim/2., 
+                position[2] - z_dim/2)
         
-        return pmin, pmax           
+        pmax = (position[0] + x_dim/2., 
+                position[1] + y_dim/2., 
+                position[2] + z_dim/2)
         
-        
+        return pmin, pmax         
         
 
     def detect_bounding_box(self, cluster = None,
@@ -738,7 +749,7 @@ class GenericDetector(object):
         >> box_msg = detector.detect_bounding_box(cluster)
 
         Parameters:
-        cluster: a PointCloud msg. It can be returned by one the detect
+        cluster: a PointCloud or Pointcloud2 msg. It can be returned by one the detect
                  methods. If none an object will be searched for.
         cluster_choser: if cluster is None, use this choser to select when
                         detecting. This has to be a function that takes a
@@ -762,8 +773,17 @@ class GenericDetector(object):
                 return None
             cluster = finder(detection_result.detection.clusters)
 
+        if type(cluster) is PointCloud:
+            cluster = PointCloud_to_PointCloud2(cluster)
+          
+        if type(cluster) is not PointCloud2:
+            rospy.logerr("cluster has to be a pointcloud2, while it's a %s",
+                         type(cluster))
+            return None
+        
         req = FindClusterBoundingBox2Request()
-        req.cluster = PointCloud_to_PointCloud2(cluster)
+        req.cluster = cluster
+        
         try:
             self.last_box_msg = self.box_detector(req)
         except rospy.ServiceException, e:
