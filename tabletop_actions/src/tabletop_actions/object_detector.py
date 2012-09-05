@@ -836,7 +836,17 @@ class GenericDetector(object):
         mover.point_head_to(position, frame)
         return True
 
-    def draw_bounding_box(self, id, box_msg, color = (1.0, 1.0, 0.0, 0.0)):
+    def draw_bounding_box(self, id, box_msg, color = (1.0, 1.0, 0.0, 0.0),
+                          duration = 0.0):
+        """
+        Draws a bounding box as detectd by detect_bounding_box.
+        
+        Parameters: 
+        box_msg is a FindClusterBoundingBoxResponse msg.
+        color: a quadruple with alpha, r,g,b
+        duration: how long should the bounding box last. 0 means forever.
+        """
+        
         marker = Marker()
         marker.header.stamp = rospy.Time.now()
         marker.ns = "object_detector"
@@ -854,6 +864,7 @@ class GenericDetector(object):
         marker.color.r = color[1]
         marker.color.g = color[2]
         marker.color.b = color[3]
+        marker.lifetime = rospy.Duration(duration)
 
         self.box_drawer.publish(marker)
 
