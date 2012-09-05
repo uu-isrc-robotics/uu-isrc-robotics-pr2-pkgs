@@ -47,6 +47,7 @@ import utils
 from arm_navigation_msgs.msg import MakeStaticCollisionMapAction, MakeStaticCollisionMapGoal
 from actionlib_msgs.msg import GoalStatus
 from pr2_control_utilities.pr2_joint_mover import PR2JointMover
+from std_srvs.srv import Empty
 
 from dynamic_reconfigure.server import Server
 from pr2_control_utilities.cfg import pr2_planningConfig
@@ -86,6 +87,12 @@ class PR2MoveArm(object):
                                 "/environment_server/set_planning_scene_diff",
                                 SetPlanningSceneDiff)
         self.planning_scene_client.wait_for_service()
+        
+        rospy.loginfo("waiting for service /collider_node/reset")
+        self.reset_srv = rospy.ServiceProxy(
+                                "/collider_node/reset",
+                                Empty)
+        self.reset_srv.wait_for_service()        
 
         self.tf_listener = tf.TransformListener()
         self.right_ik = pr2_control_utilities.IKUtilities("right",
@@ -181,7 +188,12 @@ class PR2MoveArm(object):
         else:
             return False
 
+    def reset_collision_map(self):
+        rospy.loginfo("Resetting collision map")
+        self.reset_srv()
+
     def update_planning_scene(self):
+        rospy.loginfo("Updating planning scene")
         self.planning_scene_client.call()
 
     def move_right_arm(self, position, orientation, frame_id,  waiting_time,
@@ -758,8 +770,8 @@ class PR2MoveArm(object):
 
     def point_gripper_at(self, which_arm,
                          target,
-                         diff_x = 0.3,
-                         diff_y = 0.1,
+                         diff_x = 0.2,
+                         diff_y = 0.2,
                          diff_z = 0.3,
                          num_trials = 100,
                          visualize_arrow = False):
