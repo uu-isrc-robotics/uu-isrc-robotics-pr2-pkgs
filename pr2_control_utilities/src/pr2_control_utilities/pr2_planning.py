@@ -59,8 +59,6 @@ import numpy as np
 
 
 from kinematics_msgs.srv import GetKinematicSolverInfo, GetPositionIK, GetPositionFK, GetConstraintAwarePositionIK, GetConstraintAwarePositionIKRequest
-req = GetPositionIK()
-print req._md5sum
 
 class PR2MoveArm(object):
     def __init__(self, joint_mover = None):
@@ -800,8 +798,10 @@ class PR2MoveArm(object):
         current_trial = 0
         if which_arm == "right_arm":
             ik_mover = self.move_right_arm_with_ik
+            planner_mover = self.move_right_arm
         else:
             ik_mover = self.move_left_arm_with_ik
+            planner_mover = self.move_left_arm
 
         while current_trial < num_trials:
             gripper_x = random.uniform(tx - diff_x, tx)
@@ -834,7 +834,15 @@ class PR2MoveArm(object):
                 arrow_pose.pose.orientation.z = gripper_orientation[2]
                 arrow_pose.pose.orientation.w = gripper_orientation[3]
 
-            if ik_mover(gripper_pose,
+            if planner_mover(gripper_pose,
+                             gripper_orientation,
+                             "/base_link",
+                             10
+                             ):
+                rospy.loginfo("Pointing with planner was ok")  
+                return True
+
+            elif (current_trial>10) and  ik_mover(gripper_pose,
                         gripper_orientation,
                         "/base_link",
                         5):
