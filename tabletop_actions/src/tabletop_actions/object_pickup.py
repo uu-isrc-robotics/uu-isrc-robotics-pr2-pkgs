@@ -200,6 +200,10 @@ class Grabber(object):
         
         assert isinstance(arm_mover, PR2MoveArm)
         listener = arm_mover.tf_listener
+        if type(arm_name) is not str:
+            rospy.logerr("Error, arm_name is wrong type: %s", arm_name)
+            return False
+        
         if arm_name.startswith("right"):
             if check_collisition:
                 move = arm_mover.move_right_arm
@@ -231,7 +235,8 @@ class Grabber(object):
             
             rospy.loginfo("Trying position %s, frame: %s", newposition, newpoint.header.frame_id)
             if move(newposition, orientation, newpoint.header.frame_id, 10):
-                rospy.loginfo("PLace %s was good! Now opening the gripper")
+                rospy.loginfo("PLace %s was good! Now opening the gripper",
+                              position)
                 open_gripper()
                 return True
         rospy.logwarn("Could not place object into desired position")
