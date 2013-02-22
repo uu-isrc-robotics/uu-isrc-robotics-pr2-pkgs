@@ -144,7 +144,7 @@ def matrix4ToPose(matrix):
     pos = Pose()
     pos.position.x = matrix.d
     pos.position.y = matrix.h
-    pos.position.z = matrix.e
+    pos.position.z = matrix.l
     
     q = matrix.get_quaternion()
     pos.orientation.x = q.x
