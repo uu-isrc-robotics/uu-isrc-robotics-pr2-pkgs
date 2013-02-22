@@ -36,6 +36,7 @@ class Grabber(object):
     def pickup_object(self, graspable,
                       graspable_name,
                       table_name, which_arm,
+                      execute = True,
                       desired_approach_distance = 0.2,
                       min_approach_distance = 0.05,
                       lift_desired_distance = 0.1,
@@ -52,6 +53,8 @@ class Grabber(object):
          Detector.call_collision_map_processing.
         table_name: the name of the table. Again provided by Detector.call_collision_map_processing.
         which_arm: left_arm or right_arm
+        exectute: True|False, whether to execute the grasp or just check for 
+          feasibility
         desired_approach_distance: how far the pre-grasp should ideally
          be away from the grasp
         min_approach_distance: how much distance between pre-grasp
@@ -77,6 +80,7 @@ class Grabber(object):
         pickup_goal.target = graspable
         pickup_goal.collision_object_name = graspable_name
         pickup_goal.collision_support_surface_name = table_name
+        pickup_goal.only_perform_feasibility_test = not execute
 
         pickup_goal.arm_name = which_arm
 
